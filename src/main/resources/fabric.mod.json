@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "nebrelclient",
+  "version": "${version}",
+  "name": "Nebrel Client",
+  "description": "Nebrel Client - a modern, modular Minecraft client experience for Fabric. Module system, in-game menu, themeable UI, HUD editor and fair-play visual/quality-of-life modules.",
+  "authors": [
+    "Nebrel Client"
+  ],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/nebrelclient/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "de.nebrel.client.NebrelClientMod"
+    ]
+  },
+  "mixins": [
+    {
+      "config": "nebrelclient.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

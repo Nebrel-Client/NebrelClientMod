@@ -1,0 +1,19 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "de.nebrel.client.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "client": [
+    "BackgroundRendererMixin",
+    "ClientWorldPropertiesMixin",
+    "GameRendererMixin",
+    "HeldItemRendererMixin",
+    "InGameHudMixin",
+    "ItemRendererMixin",
+    "SimpleOptionAccessor",
+    "WorldMixin"
+  ]
+}
