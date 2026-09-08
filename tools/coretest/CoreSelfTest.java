@@ -265,6 +265,21 @@ public final class CoreSelfTest {
         scroll.reset();
         settle(scroll);
         check("reset returns to the top", scroll.offset() == 0.0F);
+
+        // Non-smooth mode must report the target directly.
+        SmoothScroll instant = new SmoothScroll();
+        instant.setSmoothing(false);
+        instant.updateBounds(500.0F, 200.0F);
+        instant.scroll(-1.0D, 40.0F);
+        check("smoothing off jumps immediately", instant.offset() == 40.0F);
+        instant.scrollTo(1000.0F);
+        check("scrollTo clamps to max", instant.offset() == 300.0F);
+        instant.scrollTo(-50.0F);
+        check("scrollTo clamps to zero", instant.offset() == 0.0F);
+        instant.scrollTo(120.0F);
+        check("target reported", instant.target() == 120.0F);
+        instant.setSmoothing(true);
+        check("re-enabling smoothing keeps the target", instant.target() == 120.0F);
     }
 
     /** Advances a scroller over real time until it stops moving. */

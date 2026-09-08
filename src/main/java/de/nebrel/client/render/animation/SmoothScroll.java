@@ -18,9 +18,21 @@ public final class SmoothScroll {
     private float current;
     private float maxOffset;
     private long lastUpdateNanos;
+    private boolean smoothing = true;
 
     public SmoothScroll() {
         this.lastUpdateNanos = System.nanoTime();
+    }
+
+    /**
+     * Turns easing off, so {@link #offset()} reports the target directly.
+     *
+     * <p>Bound to the user's smooth-scrolling preference. The target is tracked
+     * identically either way, so flipping the preference mid-session does not
+     * lose the scroll position.</p>
+     */
+    public void setSmoothing(boolean value) {
+        this.smoothing = value;
     }
 
     /**
@@ -30,7 +42,17 @@ public final class SmoothScroll {
      * @param stepPixels pixels travelled per wheel notch
      */
     public void scroll(double amount, float stepPixels) {
-        this.target = NebrelMath.clamp(this.target - (float) amount * stepPixels, 0.0F, this.maxOffset);
+        scrollTo(this.target - (float) amount * stepPixels);
+    }
+
+    /** Jumps the target to an absolute offset, clamped to the content. */
+    public void scrollTo(float offset) {
+        this.target = NebrelMath.clamp(offset, 0.0F, this.maxOffset);
+    }
+
+    /** The offset being eased towards, before smoothing. */
+    public float target() {
+        return this.target;
     }
 
     /** Recomputes the clamp from the current content and viewport size. */
@@ -45,6 +67,12 @@ public final class SmoothScroll {
         long now = System.nanoTime();
         float delta = (now - this.lastUpdateNanos) / 1_000_000_000.0F;
         this.lastUpdateNanos = now;
+
+        if (!this.smoothing) {
+            this.current = this.target;
+            return this.current;
+        }
+
         // Guard against pauses (window minimised, world load) producing a huge dt.
         delta = NebrelMath.clamp(delta, 0.0F, 0.1F);
         this.current = NebrelMath.approach(this.current, this.target, APPROACH_SPEED, delta);
