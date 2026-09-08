@@ -142,8 +142,9 @@ public final class ArmorWidget extends HudWidget {
 
             if (!stack.isEmpty()) {
                 context.drawItem(stack, slotX, slotY);
-                // The vanilla overlay supplies the stack count and damage bar.
-                context.drawStackOverlay(RenderUtil.font(), stack, slotX, slotY);
+                // The vanilla slot overlay supplies the stack count, the damage
+                // bar and the cooldown sweep.
+                context.drawItemInSlot(RenderUtil.font(), stack, slotX, slotY);
             } else {
                 // An empty slot still needs a footprint so the layout is stable.
                 RenderUtil.roundedRect(context, slotX, slotY, SLOT_SIZE, SLOT_SIZE, 3.0F,

@@ -8,12 +8,14 @@
   },
   "client": [
     "BackgroundRendererMixin",
-    "ClientWorldPropertiesMixin",
+    "CameraMixin",
+    "EntityRendererMixin",
     "GameRendererMixin",
     "HeldItemRendererMixin",
     "InGameHudMixin",
     "ItemRendererMixin",
-    "SimpleOptionAccessor",
-    "WorldMixin"
+    "LivingEntityMixin",
+    "ParticleManagerMixin",
+    "SimpleOptionAccessor"
   ]
 }
