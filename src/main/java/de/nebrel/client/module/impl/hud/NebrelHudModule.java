@@ -6,7 +6,6 @@ import de.nebrel.client.hud.HudManager;
 import de.nebrel.client.module.Module;
 import de.nebrel.client.module.ModuleCategory;
 import de.nebrel.client.setting.BooleanSetting;
-import de.nebrel.client.setting.Setting;
 import de.nebrel.client.setting.SettingSection;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
@@ -45,7 +44,7 @@ public final class NebrelHudModule extends Module implements HudRenderHook {
         // modules.json and hud.json; that is redundant but self-consistent,
         // and it keeps hud.json complete enough to share on its own.
         for (var widget : hud.widgets()) {
-            Setting<?> toggle = widget.enabled;
+            BooleanSetting toggle = widget.enabled;
             toggle.section("Widgets");
             register(toggle);
         }
