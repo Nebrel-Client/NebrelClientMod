@@ -1,0 +1,103 @@
+plugins {
+    id 'fabric-loom' version '1.7-SNAPSHOT'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    mavenCentral()
+}
+
+configurations {
+    // Only used by the headless `compileCore` verification task below. Gson
+    // itself is already on Minecraft's runtime classpath, so it is deliberately
+    // NOT added to `implementation` and is never shaded into the jar.
+    coreDeps
+}
+
+loom {
+    // Nebrel Client is a client-only mod: everything lives in src/main and is
+    // gated by "environment": "client" in fabric.mod.json. No split source
+    // sets, so there is exactly one place to look for any given class.
+    runs {
+        client {
+            client()
+            ideConfigGenerated true
+            runDir 'run'
+        }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    coreDeps 'com.google.code.gson:gson:2.10.1'
+}
+
+processResources {
+    inputs.property 'version', project.version
+    inputs.property 'minecraft_version', project.minecraft_version
+    inputs.property 'loader_version', project.loader_version
+
+    filesMatching('fabric.mod.json') {
+        expand 'version': project.version,
+                'minecraft_version': project.minecraft_version,
+                'loader_version': project.loader_version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+    it.options.encoding = 'UTF-8'
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+jar {
+    inputs.property 'archivesName', project.base.archivesName
+
+    from('LICENSE') {
+        rename { "${it}_${inputs.properties.archivesName}" }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Headless core verification.
+//
+// The platform-independent half of Nebrel (settings, config, module registry,
+// theme, animation, search) imports no Minecraft classes. This task compiles
+// exactly that subset with the plain JDK so it can be checked on machines that
+// cannot reach the Fabric/Mojang maven hosts.
+// ---------------------------------------------------------------------------
+tasks.register('compileCore', JavaCompile) {
+    group = 'verification'
+    description = 'Compiles the Minecraft-independent core with the plain JDK.'
+
+    source = fileTree('src/main/java').matching {
+        include 'de/nebrel/client/setting/**'
+        include 'de/nebrel/client/module/Module.java'
+        include 'de/nebrel/client/module/ModuleCategory.java'
+        include 'de/nebrel/client/module/ModuleManager.java'
+        include 'de/nebrel/client/config/**'
+        include 'de/nebrel/client/gui/theme/**'
+        include 'de/nebrel/client/render/animation/**'
+        include 'de/nebrel/client/hud/HudAnchor.java'
+        include 'de/nebrel/client/util/**'
+    }
+    classpath = configurations.coreDeps
+    destinationDirectory = layout.buildDirectory.dir('classes/core')
+    options.release = 21
+    options.encoding = 'UTF-8'
+}
