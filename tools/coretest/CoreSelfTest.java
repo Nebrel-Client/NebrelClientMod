@@ -23,13 +23,41 @@ import de.nebrel.client.setting.RangeSetting;
 import de.nebrel.client.setting.Setting;
 import de.nebrel.client.setting.StringSetting;
 import de.nebrel.client.hud.HudAnchor;
+import de.nebrel.client.plus.EntitlementProvider;
+import de.nebrel.client.plus.EntitlementService;
+import de.nebrel.client.plus.LocalEntitlementProvider;
+import de.nebrel.client.plus.NebrelEntitlement;
+import de.nebrel.client.plus.PlusSettings;
+import de.nebrel.client.plus.RemoteEntitlementProvider;
+import de.nebrel.client.render.icon.Icons;
+import de.nebrel.client.render.icon.PixelIcon;
+import de.nebrel.client.plus.badge.BadgeService;
+import de.nebrel.client.plus.badge.NebrelBadge;
+import de.nebrel.client.plus.nametag.AdditionalNametag;
+import de.nebrel.client.plus.nametag.EffectStage;
+import de.nebrel.client.plus.nametag.NametagEffect;
+import de.nebrel.client.plus.nametag.NametagEffectPipeline;
+import de.nebrel.client.plus.nametag.NametagProfile;
+import de.nebrel.client.plus.nametag.NametagRenderContext;
+import de.nebrel.client.plus.profile.NebrelPlayerProfile;
+import de.nebrel.client.plus.profile.PlayerProfileCache;
+import de.nebrel.client.plus.render.GlyphSink;
+import de.nebrel.client.plus.render.IdentityRenderer;
 import de.nebrel.client.util.ColorUtil;
 import de.nebrel.client.util.NebrelMath;
 
+import com.sun.net.httpserver.HttpServer;
+
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Headless verification for the Minecraft-independent half of Nebrel Client.
@@ -107,6 +135,14 @@ public final class CoreSelfTest {
             testConfigRoundTrip(temp);
             testConfigResilience(temp);
             testClientSettings();
+            testEntitlements();
+            testBadgeService();
+            testAdditionalNametagSanitising();
+            testEffectPipeline();
+            testIdentityRendering();
+            testPlusConfigRoundTrip(temp);
+            testRemoteEntitlementProvider();
+            testPixelIcons();
         } finally {
             deleteTree(temp);
         }
@@ -661,6 +697,39 @@ public final class CoreSelfTest {
                 ColorUtil.luminance(Themes.DARK.textPrimary) - ColorUtil.luminance(Themes.DARK.surface) > 0.5F);
         check("light text contrasts with surface",
                 ColorUtil.luminance(Themes.LIGHT.surface) - ColorUtil.luminance(Themes.LIGHT.textPrimary) > 0.5F);
+
+        // -- Nebrel Glass: the one theme whose surfaces are meant to show the
+        // world through them, so what matters here is exactly what does NOT
+        // hold for Dark or Light: alpha under 0xFF on every surface token.
+        check("glass background is translucent", ColorUtil.alpha(Themes.GLASS.background) < 0xFF);
+        check("glass surface is translucent", ColorUtil.alpha(Themes.GLASS.surface) < 0xFF);
+        check("glass elevated surface is translucent",
+                ColorUtil.alpha(Themes.GLASS.surfaceElevated) < 0xFF);
+        check("glass hover surface is translucent",
+                ColorUtil.alpha(Themes.GLASS.surfaceHover) < 0xFF);
+        // Text has to stay fully opaque regardless of what shows through
+        // behind it, or it would be unreadable over a busy background.
+        check("glass text stays fully opaque", ColorUtil.alpha(Themes.GLASS.textPrimary) == 0xFF);
+        check("glass text is dark, for contrast against a white frost",
+                ColorUtil.luminance(Themes.GLASS.textPrimary) < 0.3F);
+        check("glass layers still get progressively more opaque",
+                ColorUtil.alpha(Themes.GLASS.background) < ColorUtil.alpha(Themes.GLASS.surface)
+                        && ColorUtil.alpha(Themes.GLASS.surface)
+                        < ColorUtil.alpha(Themes.GLASS.surfaceElevated)
+                        && ColorUtil.alpha(Themes.GLASS.surfaceElevated)
+                        < ColorUtil.alpha(Themes.GLASS.surfaceHover));
+        check("glass keeps the same brand accent as the other themes",
+                Themes.GLASS.accent == Themes.DEFAULT_ACCENT);
+
+        // -- cycling: Dark -> Light -> Glass -> Dark, wrapping cleanly -------
+        ThemeManager cycle = new ThemeManager();
+        check("cycle starts on dark", cycle.baseTheme().id().equals(Themes.DARK.id()));
+        cycle.cycleTheme();
+        check("cycle step 1 is light", cycle.baseTheme().id().equals(Themes.LIGHT.id()));
+        cycle.cycleTheme();
+        check("cycle step 2 is glass", cycle.baseTheme().id().equals(Themes.GLASS.id()));
+        cycle.cycleTheme();
+        check("cycle wraps back to dark", cycle.baseTheme().id().equals(Themes.DARK.id()));
     }
 
     static void testConfigRoundTrip(Path root) {
@@ -858,6 +927,886 @@ public final class CoreSelfTest {
     }
 
     // -- harness -------------------------------------------------------------
+
+
+    // -- Nebrel+ --------------------------------------------------------------
+
+    /**
+     * A provider that grants whatever it is told, so the merge and the cache can
+     * be driven without any of the real sources.
+     */
+    static final class StubProvider implements EntitlementProvider {
+        final String id;
+        final boolean authoritative;
+        Set<NebrelEntitlement> grant = Set.of();
+        UUID target;
+        int calls;
+        boolean throwOnCall;
+
+        StubProvider(String id, boolean authoritative) {
+            this.id = id;
+            this.authoritative = authoritative;
+        }
+
+        @Override
+        public String name() {
+            return this.id;
+        }
+
+        @Override
+        public boolean authoritative() {
+            return this.authoritative;
+        }
+
+        @Override
+        public Set<NebrelEntitlement> entitlementsOf(UUID playerId) {
+            this.calls++;
+            if (this.throwOnCall) {
+                throw new IllegalStateException("provider failure");
+            }
+            return this.target == null || this.target.equals(playerId) ? this.grant : Set.of();
+        }
+    }
+
+    /** Records every draw so a test can assert what was actually painted. */
+    static final class RecordingSink implements GlyphSink {
+        final List<String> glyphs = new ArrayList<>();
+        final List<Integer> colors = new ArrayList<>();
+        final List<Float> positions = new ArrayList<>();
+        final List<Float> scales = new ArrayList<>();
+        int plates;
+        int outlines;
+        boolean supportsPlates = true;
+
+        @Override
+        public void glyph(String text, float x, float y, float scale, float skew, int color,
+                          int background) {
+            this.glyphs.add(text);
+            this.colors.add(color);
+            this.positions.add(x);
+            this.scales.add(scale);
+            if (background != 0) {
+                this.plates++;
+            }
+        }
+
+        @Override
+        public void plate(float x, float y, float width, float height, float radius, int color) {
+            this.plates++;
+        }
+
+        @Override
+        public void plateOutline(float x, float y, float width, float height, float radius,
+                                 int color) {
+            this.outlines++;
+        }
+
+        @Override
+        public boolean supportsPlates() {
+            return this.supportsPlates;
+        }
+
+        @Override
+        public float width(String text) {
+            // A fixed six pixels per character: the real widths come from the
+            // game's font, and the geometry under test does not depend on them.
+            return text == null ? 0.0F : text.length() * 6.0F;
+        }
+
+        @Override
+        public float lineHeight() {
+            return 9.0F;
+        }
+
+        String drawn() {
+            return String.join("", this.glyphs);
+        }
+    }
+
+    static void testEntitlements() {
+        section("entitlements");
+
+        PlusSettings settings = new PlusSettings();
+        UUID local = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+
+        LocalEntitlementProvider provider = new LocalEntitlementProvider(settings);
+        provider.setLocalPlayer(local);
+
+        check("local provider is not authoritative", !provider.authoritative());
+        check("development mode defaults on", settings.developmentMode.get());
+        check("local player is granted the development set",
+                provider.entitlementsOf(local).contains(NebrelEntitlement.NEBREL_PLUS));
+        check("another player is granted nothing",
+                provider.entitlementsOf(other).isEmpty());
+        check("a null player is granted nothing",
+                provider.entitlementsOf(null).isEmpty());
+
+        // The security boundary this class deliberately does not pretend to be:
+        // with development mode off it grants nothing at all, to anyone.
+        settings.developmentMode.set(false);
+        check("development mode off grants nothing", provider.entitlementsOf(local).isEmpty());
+        settings.developmentMode.set(true);
+
+        check("the grant only covers implemented entitlements",
+                LocalEntitlementProvider.developmentGrant().stream()
+                        .allMatch(NebrelEntitlement::implemented));
+        check("the grant is unmodifiable", unmodifiable(
+                () -> LocalEntitlementProvider.developmentGrant()
+                        .add(NebrelEntitlement.STAFF_BADGE)));
+
+        // -- merging across providers ---------------------------------------
+        EntitlementService service = new EntitlementService();
+        StubProvider first = new StubProvider("first", false);
+        StubProvider second = new StubProvider("second", false);
+        service.addProvider(first);
+        service.addProvider(second);
+
+        check("no authoritative source yet", !service.hasAuthoritativeSource());
+        check("nobody holds anything", !service.isPlus(local));
+
+        first.grant = Set.of(NebrelEntitlement.NEBREL_PLUS);
+        second.grant = Set.of(NebrelEntitlement.NAMETAG_DESIGNER);
+        service.invalidate();
+        Set<NebrelEntitlement> merged = service.entitlementsOf(local);
+        check("providers are merged", merged.size() == 2
+                && merged.contains(NebrelEntitlement.NEBREL_PLUS)
+                && merged.contains(NebrelEntitlement.NAMETAG_DESIGNER));
+        check("isPlus follows the merged set", service.isPlus(local));
+        check("has() answers a specific capability",
+                service.has(local, NebrelEntitlement.NAMETAG_DESIGNER));
+        check("has() is false for one nobody granted",
+                !service.has(local, NebrelEntitlement.STAFF_BADGE));
+
+        // The answer is cached, so a second ask must not reach the providers.
+        int before = first.calls;
+        service.entitlementsOf(local);
+        check("repeated lookups are cached", first.calls == before);
+
+        service.invalidate();
+        service.entitlementsOf(local);
+        check("invalidate forces a refetch", first.calls > before);
+
+        // A provider that throws must not take the others down with it.
+        first.throwOnCall = true;
+        service.invalidate();
+        Set<NebrelEntitlement> survived = service.entitlementsOf(local);
+        check("a throwing provider is skipped, not fatal",
+                survived.contains(NebrelEntitlement.NAMETAG_DESIGNER));
+        first.throwOnCall = false;
+
+        StubProvider remote = new StubProvider("remote", true);
+        service.addProvider(remote);
+        check("an authoritative provider is reported",
+                service.hasAuthoritativeSource());
+    }
+
+    static void testBadgeService() {
+        section("badge service");
+
+        PlusSettings settings = new PlusSettings();
+        EntitlementService service = new EntitlementService();
+        StubProvider provider = new StubProvider("stub", false);
+        service.addProvider(provider);
+        BadgeService badges = new BadgeService(service, settings);
+
+        UUID player = UUID.randomUUID();
+        check("no entitlement means no badge", !badges.hasBadge(player));
+        check("getBadge is empty rather than null", badges.getBadge(player).isEmpty());
+
+        provider.grant = Set.of(NebrelEntitlement.NEBREL_PLUS_BADGE);
+        service.invalidate();
+        check("the badge appears with the entitlement", badges.hasBadge(player));
+        check("the badge is the Nebrel+ one",
+                badges.getBadge(player).orElseThrow() == NebrelBadge.NEBREL_PLUS);
+        check("the badge glyph is N", NebrelBadge.NEBREL_PLUS.glyph().equals("N"));
+
+        // Switching the badge off hides it without touching the entitlement.
+        settings.badgeEnabled.set(false);
+        check("disabling the badge hides it", !badges.hasBadge(player));
+        check("the entitlement is untouched",
+                service.has(player, NebrelEntitlement.NEBREL_PLUS_BADGE));
+        settings.badgeEnabled.set(true);
+
+        // -- priority ordering ----------------------------------------------
+        NebrelBadge staff = new NebrelBadge("staff", "Staff", "S", 0xFFFF0000, 10,
+                NebrelEntitlement.STAFF_BADGE);
+        badges.register(staff);
+        provider.grant = Set.of(NebrelEntitlement.NEBREL_PLUS_BADGE,
+                NebrelEntitlement.STAFF_BADGE);
+        service.invalidate();
+        check("both badges are held", badges.getBadges(player).size() == 2);
+        check("the lower priority number wins the front",
+                badges.getBadge(player).orElseThrow() == staff);
+
+        // -- colour modes ----------------------------------------------------
+        int accent = 0xFF8B5CF6;
+        settings.badgeColorMode.set(PlusSettings.BadgeColorMode.NEBREL_ACCENT);
+        check("accent mode follows the accent",
+                badges.resolveColor(NebrelBadge.NEBREL_PLUS, accent, 0xFF00FF00) == accent);
+        settings.badgeColorMode.set(PlusSettings.BadgeColorMode.CUSTOM);
+        settings.badgeCustomColor.set(0xFF123456);
+        check("custom mode uses the custom colour",
+                badges.resolveColor(NebrelBadge.NEBREL_PLUS, accent, 0xFF00FF00) == 0xFF123456);
+        settings.badgeColorMode.set(PlusSettings.BadgeColorMode.MATCH_NAMETAG);
+        check("match mode follows the name",
+                badges.resolveColor(NebrelBadge.NEBREL_PLUS, accent, 0xFF00FF00) == 0xFF00FF00);
+        check("a badge with its own colour ignores the accent",
+                staff.resolveColor(accent) == 0xFFFF0000);
+        settings.badgeColorMode.set(PlusSettings.BadgeColorMode.NEBREL_ACCENT);
+
+        // -- the profile cache ------------------------------------------------
+        // From here the grant is aimed at one player, so a stranger genuinely
+        // holds nothing rather than inheriting the stub's blanket grant.
+        provider.target = player;
+        service.invalidate();
+
+        PlayerProfileCache cache = new PlayerProfileCache(service, badges, settings);
+        cache.setLocalPlayerSupplier(() -> player);
+        NebrelPlayerProfile profile = cache.get(player, "Tester");
+        check("the profile carries the badges", profile.badges().size() == 2);
+        check("the profile is not plain", !profile.isPlain());
+        check("the cache retains the entry", cache.size() == 1);
+        check("a second get returns the same instance", cache.get(player, "Tester") == profile);
+
+        // The nametag style rides on the designer entitlement, not on merely
+        // being the local player.
+        check("no designer entitlement means no attached style",
+                !profile.hasNametagStyle());
+        provider.grant = Set.of(NebrelEntitlement.NEBREL_PLUS_BADGE,
+                NebrelEntitlement.STAFF_BADGE, NebrelEntitlement.NAMETAG_DESIGNER);
+        service.invalidate();
+        cache.invalidate();
+        check("the local player's nametag style is attached",
+                cache.get(player, "Tester").hasNametagStyle());
+
+        UUID stranger = UUID.randomUUID();
+        NebrelPlayerProfile strangerProfile = cache.get(stranger, "Stranger");
+        check("a stranger holds nothing", strangerProfile.isPlain());
+        check("a remote player has no known nametag style",
+                !strangerProfile.hasNametagStyle());
+
+        cache.invalidate();
+        check("invalidate empties the cache", cache.size() == 0);
+        check("a null id yields an empty profile",
+                cache.get(null, "Nobody").isPlain());
+    }
+
+    static void testAdditionalNametagSanitising() {
+        section("additional nametag");
+
+        check("plain text survives",
+                AdditionalNametag.sanitise("Nebrel Player").equals("Nebrel Player"));
+        check("null becomes empty", AdditionalNametag.sanitise(null).isEmpty());
+        check("the section sign is stripped",
+                !AdditionalNametag.sanitise("§cRed").contains("§"));
+        check("control characters are stripped",
+                AdditionalNametag.sanitise("ab" + (char) 7 + "c").equals("abc"));
+        check("newlines cannot split the line",
+                !AdditionalNametag.sanitise("one\ntwo").contains("\n"));
+        check("whitespace is collapsed",
+                AdditionalNametag.sanitise("a     b").equals("a b"));
+        check("surrounding whitespace is trimmed",
+                AdditionalNametag.sanitise("   padded   ").equals("padded"));
+
+        String tooLong = "x".repeat(AdditionalNametag.MAX_LENGTH + 40);
+        check("length is capped",
+                AdditionalNametag.sanitise(tooLong).length() == AdditionalNametag.MAX_LENGTH);
+
+        AdditionalNametag additional = new AdditionalNametag();
+        check("inactive by default", !additional.active());
+        additional.enabled.set(true);
+        check("enabled but empty is still inactive", !additional.active());
+        additional.text.set("  Hello  ");
+        check("enabled with text is active", additional.active());
+        check("resolvedText is sanitised", additional.resolvedText().equals("Hello"));
+        check("the stored text respects the cap",
+                additional.text.get().length() <= AdditionalNametag.MAX_LENGTH);
+    }
+
+    static void testEffectPipeline() {
+        section("effect pipeline");
+
+        NametagEffectPipeline pipeline = new NametagEffectPipeline();
+        check("seven effects ship", pipeline.effects().size() == 7);
+        check("all effects start off", pipeline.enabledCount() == 0);
+        check("nothing is enabled", !pipeline.anyEnabled());
+        check("no colour effect is enabled", !pipeline.anyColorEnabled());
+        check("no geometric effect is enabled", !pipeline.anyGeometricEnabled());
+
+        // Stage order is the pipeline's central invariant: a position effect
+        // that ran before a colour effect would read a colour that is about to
+        // change. The constructor asserts it; this proves the list still holds.
+        int previous = -1;
+        boolean ordered = true;
+        for (NametagEffect effect : pipeline.effects()) {
+            int stage = effect.stage().ordinal();
+            if (stage < previous) {
+                ordered = false;
+            }
+            previous = stage;
+        }
+        check("effects are in stage order", ordered);
+        check("rainbow is a colour stage",
+                pipeline.rainbow.stage() == EffectStage.COLOR);
+        check("blinking is an alpha stage",
+                pipeline.blinking.stage() == EffectStage.ALPHA);
+        check("shaking is a position stage",
+                pipeline.shaking.stage() == EffectStage.POSITION);
+        check("growing is a transform stage",
+                pipeline.growing.stage() == EffectStage.TRANSFORM);
+        check("colour stages are not geometric", !pipeline.rainbow.geometric());
+        check("position stages are geometric", pipeline.shaking.geometric());
+
+        int white = 0xFFFFFFFF;
+
+        // An off pipeline must leave the glyph exactly as it arrived.
+        NametagRenderContext idle = pipeline.evaluate(1.0F, 0, 5, 'N', white);
+        check("an idle pipeline keeps the colour", idle.color() == white);
+        check("an idle pipeline keeps full alpha", Math.abs(idle.alpha() - 1.0F) < 1.0E-6F);
+        check("an idle pipeline adds no offset",
+                idle.offsetX() == 0.0F && idle.offsetY() == 0.0F);
+        check("an idle pipeline keeps scale 1", Math.abs(idle.scale() - 1.0F) < 1.0E-6F);
+        check("an idle pipeline adds no skew", idle.skew() == 0.0F);
+
+        // -- each effect actually changes its own output ----------------------
+        pipeline.rainbow.setEnabled(true);
+        check("rainbow reports enabled", pipeline.anyEnabled() && pipeline.anyColorEnabled());
+        check("rainbow is not geometric", !pipeline.anyGeometricEnabled());
+        int rainbowColor = pipeline.evaluate(1.0F, 0, 5, 'N', white).color();
+        check("rainbow changes the colour", rainbowColor != white);
+        int laterChar = pipeline.evaluate(1.0F, 3, 5, 'N', white).color();
+        check("rainbow spreads across characters", laterChar != rainbowColor);
+        pipeline.rainbow.setEnabled(false);
+
+        pipeline.blinking.setEnabled(true);
+        boolean alphaMoved = false;
+        for (int i = 0; i < 40 && !alphaMoved; i++) {
+            if (pipeline.evaluate(i * 0.1F, 0, 5, 'N', white).alpha() < 0.999F) {
+                alphaMoved = true;
+            }
+        }
+        check("blinking moves the alpha", alphaMoved);
+        pipeline.blinking.setEnabled(false);
+
+        pipeline.shaking.setEnabled(true);
+        check("shaking counts as geometric", pipeline.anyGeometricEnabled());
+        boolean shifted = false;
+        for (int i = 0; i < 40 && !shifted; i++) {
+            NametagRenderContext ctx = pipeline.evaluate(i * 0.1F, 0, 5, 'N', white);
+            if (Math.abs(ctx.offsetX()) > 1.0E-4F || Math.abs(ctx.offsetY()) > 1.0E-4F) {
+                shifted = true;
+            }
+        }
+        check("shaking moves the glyph", shifted);
+        pipeline.shaking.setEnabled(false);
+
+        pipeline.waving.setEnabled(true);
+        boolean waved = false;
+        for (int i = 0; i < 40 && !waved; i++) {
+            if (Math.abs(pipeline.evaluate(i * 0.1F, 0, 5, 'N', white).offsetY()) > 1.0E-4F) {
+                waved = true;
+            }
+        }
+        check("waving moves the glyph vertically", waved);
+        pipeline.waving.setEnabled(false);
+
+        pipeline.growing.setEnabled(true);
+        boolean grew = false;
+        for (int i = 0; i < 40 && !grew; i++) {
+            if (Math.abs(pipeline.evaluate(i * 0.1F, 0, 5, 'N', white).scale() - 1.0F) > 1.0E-4F) {
+                grew = true;
+            }
+        }
+        check("growing changes the scale", grew);
+        pipeline.growing.setEnabled(false);
+
+        pipeline.skewing.setEnabled(true);
+        boolean leaned = false;
+        for (int i = 0; i < 40 && !leaned; i++) {
+            if (Math.abs(pipeline.evaluate(i * 0.1F, 0, 5, 'N', white).skew()) > 1.0E-4F) {
+                leaned = true;
+            }
+        }
+        check("skewing leans the glyph", leaned);
+        pipeline.skewing.setEnabled(false);
+
+        pipeline.chromatic.setEnabled(true);
+        check("chromatic changes the colour",
+                pipeline.evaluate(1.0F, 0, 5, 'N', white).color() != white);
+        pipeline.chromatic.setEnabled(false);
+
+        // -- determinism ------------------------------------------------------
+        // Every effect must be a pure function of its inputs. Anything reaching
+        // for Math.random() would render differently in the preview than above
+        // the player's head, and differently on every frame.
+        pipeline.shaking.setEnabled(true);
+        pipeline.rainbow.setEnabled(true);
+        pipeline.growing.setEnabled(true);
+        NametagRenderContext once = pipeline.evaluate(4.25F, 2, 7, 'e', white);
+        float x1 = once.offsetX();
+        float y1 = once.offsetY();
+        int c1 = once.color();
+        float s1 = once.scale();
+        NametagRenderContext twice = pipeline.evaluate(4.25F, 2, 7, 'e', white);
+        check("evaluation is deterministic in x", twice.offsetX() == x1);
+        check("evaluation is deterministic in y", twice.offsetY() == y1);
+        check("evaluation is deterministic in colour", twice.color() == c1);
+        check("evaluation is deterministic in scale", twice.scale() == s1);
+
+        NametagRenderContext elsewhere = pipeline.evaluate(9.75F, 2, 7, 'e', white);
+        check("a different time gives a different result",
+                elsewhere.offsetX() != x1 || elsewhere.color() != c1
+                        || elsewhere.scale() != s1);
+
+        check("enabledCount tracks the switches", pipeline.enabledCount() == 3);
+        pipeline.disableAll();
+        check("disableAll switches everything off", pipeline.enabledCount() == 0);
+
+        // Tuning settings only show while their effect is on, so the designer
+        // does not list sliders for an effect nobody enabled.
+        check("tuning is hidden while the effect is off",
+                pipeline.rainbow.tuningSettings().stream().noneMatch(Setting::visible));
+        pipeline.rainbow.setEnabled(true);
+        check("tuning appears with the effect",
+                pipeline.rainbow.tuningSettings().stream().allMatch(Setting::visible));
+
+        pipeline.reset();
+        check("reset switches everything off", pipeline.enabledCount() == 0);
+    }
+
+    static void testIdentityRendering() {
+        section("identity rendering");
+
+        PlusSettings settings = new PlusSettings();
+        EntitlementService service = new EntitlementService();
+        StubProvider provider = new StubProvider("stub", false);
+        provider.grant = Set.of(NebrelEntitlement.NEBREL_PLUS_BADGE);
+        service.addProvider(provider);
+        BadgeService badges = new BadgeService(service, settings);
+        IdentityRenderer renderer = new IdentityRenderer(settings, badges);
+
+        NametagProfile profile = new NametagProfile();
+        int accent = 0xFF8B5CF6;
+        int white = 0xFFFFFFFF;
+
+        // The point of this test: a badge is only implemented if something is
+        // actually drawn. A flag saying "has badge" would pass every check
+        // above this line and fail every check below it.
+        settings.badgeStyle.set(PlusSettings.BadgeStyle.PLATE);
+        RecordingSink sink = new RecordingSink();
+        float consumed = renderer.drawBadge(sink, NebrelBadge.NEBREL_PLUS, 0.0F, 0.0F,
+                accent, white, null, 0.0F);
+        check("the badge draws a glyph", sink.glyphs.contains("N"));
+        check("the plate style draws a plate", sink.plates == 1);
+        check("the badge consumes width", consumed > 0.0F);
+        check("the badge is drawn in the accent", sink.colors.contains(accent));
+
+        settings.badgeStyle.set(PlusSettings.BadgeStyle.OUTLINE);
+        sink = new RecordingSink();
+        renderer.drawBadge(sink, NebrelBadge.NEBREL_PLUS, 0.0F, 0.0F, accent, white, null, 0.0F);
+        check("the outline style draws an outline", sink.outlines == 1);
+        check("the outline style still draws the glyph", sink.glyphs.contains("N"));
+
+        // World space has no geometry, so the outline style has to fall back
+        // rather than silently drawing nothing.
+        sink = new RecordingSink();
+        sink.supportsPlates = false;
+        renderer.drawBadge(sink, NebrelBadge.NEBREL_PLUS, 0.0F, 0.0F, accent, white, null, 0.0F);
+        check("a plateless sink still shows the badge", sink.glyphs.contains("N"));
+        check("a plateless sink draws no outline", sink.outlines == 0);
+
+        settings.badgeStyle.set(PlusSettings.BadgeStyle.BRACKET);
+        sink = new RecordingSink();
+        renderer.drawBadge(sink, NebrelBadge.NEBREL_PLUS, 0.0F, 0.0F, accent, white, null, 0.0F);
+        check("the bracket style brackets the glyph", sink.drawn().equals("[N]"));
+
+        settings.badgeStyle.set(PlusSettings.BadgeStyle.PLAIN);
+        sink = new RecordingSink();
+        renderer.drawBadge(sink, NebrelBadge.NEBREL_PLUS, 0.0F, 0.0F, accent, white, null, 0.0F);
+        check("the plain style draws the glyph alone", sink.drawn().equals("N"));
+        check("the plain style draws no plate", sink.plates == 0);
+
+        // Switched off, nothing is drawn and nothing is reserved.
+        settings.badgeEnabled.set(false);
+        sink = new RecordingSink();
+        float none = renderer.drawBadge(sink, NebrelBadge.NEBREL_PLUS, 0.0F, 0.0F,
+                accent, white, null, 0.0F);
+        check("a disabled badge draws nothing", sink.glyphs.isEmpty());
+        check("a disabled badge consumes no width", none == 0.0F);
+        check("a disabled badge measures zero",
+                renderer.badgeWidth(sink, NebrelBadge.NEBREL_PLUS) == 0.0F);
+        settings.badgeEnabled.set(true);
+        settings.badgeStyle.set(PlusSettings.BadgeStyle.PLATE);
+
+        check("a null badge draws nothing",
+                renderer.drawBadge(new RecordingSink(), null, 0.0F, 0.0F, accent, white,
+                        null, 0.0F) == 0.0F);
+
+        // -- the name --------------------------------------------------------
+        sink = new RecordingSink();
+        float width = renderer.drawStyledText(sink, "Nebrel", 0.0F, 0.0F, white, null, 0.0F);
+        check("an unstyled name is one draw", sink.glyphs.size() == 1);
+        check("an unstyled name is drawn whole", sink.drawn().equals("Nebrel"));
+        check("an unstyled name reports its width", width == 36.0F);
+
+        sink = new RecordingSink();
+        renderer.drawStyledText(sink, "Nebrel", 0.0F, 0.0F, white, profile.effects, 0.0F);
+        check("an idle pipeline is still one draw", sink.glyphs.size() == 1);
+
+        profile.effects.rainbow.setEnabled(true);
+        sink = new RecordingSink();
+        width = renderer.drawStyledText(sink, "Nebrel", 0.0F, 0.0F, white, profile.effects, 1.0F);
+        check("an animated name is drawn per glyph", sink.glyphs.size() == 6);
+        check("the glyphs still spell the name", sink.drawn().equals("Nebrel"));
+        check("an animated name keeps its width", width == 36.0F);
+        check("the glyphs advance evenly",
+                sink.positions.get(0) == 0.0F && sink.positions.get(1) == 6.0F
+                        && sink.positions.get(5) == 30.0F);
+        check("the glyphs are not all one colour",
+                sink.colors.stream().distinct().count() > 1);
+
+        // Scaling must not push neighbours around: the pulse happens in place.
+        profile.effects.rainbow.setEnabled(false);
+        profile.effects.growing.setEnabled(true);
+        sink = new RecordingSink();
+        renderer.drawStyledText(sink, "Nebrel", 0.0F, 0.0F, white, profile.effects, 1.0F);
+        check("scaling does not change the advance",
+                sink.positions.get(1) == 6.0F && sink.positions.get(5) == 30.0F);
+        profile.effects.growing.setEnabled(false);
+
+        // -- the badge follows the name's colour when asked ------------------
+        settings.badgeColorMode.set(PlusSettings.BadgeColorMode.MATCH_NAMETAG);
+        profile.effects.rainbow.setEnabled(true);
+        int first = renderer.resolveFirstNameColor("Nebrel", white, profile.effects, 1.0F);
+        check("the first name colour is resolved", first != white);
+        sink = new RecordingSink();
+        renderer.drawBadge(sink, NebrelBadge.NEBREL_PLUS, 0.0F, 0.0F, accent, first, null, 0.0F);
+        check("match mode paints the badge the name's colour",
+                sink.colors.contains(first));
+        settings.badgeColorMode.set(PlusSettings.BadgeColorMode.NEBREL_ACCENT);
+
+        // The badge holds still by default: an animated identity marker is
+        // harder to recognise, so colour effects only reach it on request.
+        check("animate badge is off by default", !settings.animateBadge.get());
+        sink = new RecordingSink();
+        renderer.drawBadge(sink, NebrelBadge.NEBREL_PLUS, 0.0F, 0.0F, accent, white,
+                profile.effects, 1.0F);
+        check("a still badge keeps the accent", sink.colors.contains(accent));
+
+        settings.animateBadge.set(true);
+        sink = new RecordingSink();
+        renderer.drawBadge(sink, NebrelBadge.NEBREL_PLUS, 0.0F, 0.0F, accent, white,
+                profile.effects, 1.0F);
+        check("an animated badge leaves the accent", !sink.colors.contains(accent));
+
+        // Position effects must never reach the badge, animated or not.
+        profile.effects.rainbow.setEnabled(false);
+        profile.effects.shaking.setEnabled(true);
+        sink = new RecordingSink();
+        renderer.drawBadge(sink, NebrelBadge.NEBREL_PLUS, 0.0F, 0.0F, accent, white,
+                profile.effects, 1.0F);
+        check("the badge never moves", sink.positions.stream().allMatch(x -> x >= 0.0F));
+        check("the badge never scales",
+                sink.scales.stream().allMatch(s -> Math.abs(s - settings.badgeScale.getFloat())
+                        < 1.0E-6F));
+
+        // -- badge plus name, measured together ------------------------------
+        settings.animateBadge.set(false);
+        profile.effects.reset();
+        sink = new RecordingSink();
+        float total = renderer.totalWidth(sink, NebrelBadge.NEBREL_PLUS, "Nebrel");
+        float badgeOnly = renderer.badgeWidth(sink, NebrelBadge.NEBREL_PLUS);
+        check("the total is badge plus name", Math.abs(total - (badgeOnly + 36.0F)) < 1.0E-4F);
+        check("the badge width includes its gap",
+                badgeOnly > 6.0F * settings.badgeScale.getFloat());
+    }
+
+    static void testPlusConfigRoundTrip(Path root) throws Exception {
+        section("Nebrel+ config");
+
+        PlusSettings settings = new PlusSettings();
+        check("Nebrel+ has its own file", settings.fileName().equals("plus.json"));
+
+        settings.badgeStyle.set(PlusSettings.BadgeStyle.BRACKET);
+        settings.badgeGap.set(5.0D);
+        settings.showInChat.set(false);
+        settings.nametag().useNameColor.set(false);
+        settings.nametag().baseColor.set(0xFF00FF88);
+        settings.nametag().effects.waving.setEnabled(true);
+        settings.nametag().additional.enabled.set(true);
+        settings.nametag().additional.text.set("Nebrel Player");
+
+        JsonObject written = new JsonObject();
+        settings.write(written);
+
+        PlusSettings restored = new PlusSettings();
+        restored.read(written);
+
+        check("the badge style survives",
+                restored.badgeStyle.get() == PlusSettings.BadgeStyle.BRACKET);
+        check("a number survives", Math.abs(restored.badgeGap.getFloat() - 5.0F) < 1.0E-4F);
+        check("a switch survives", !restored.showInChat.get());
+        check("the nametag colour survives", restored.nametag().baseColor.get() == 0xFF00FF88);
+        check("an enabled effect survives", restored.nametag().effects.waving.enabled());
+        check("the extra line survives",
+                restored.nametag().additional.resolvedText().equals("Nebrel Player"));
+
+        // Nothing that does not belong in a plain file on disk may appear in it.
+        String json = written.toString().toLowerCase(java.util.Locale.ROOT);
+        check("no token is written", !json.contains("token"));
+        check("no password is written", !json.contains("password"));
+        check("no payment data is written",
+                !json.contains("payment") && !json.contains("card"));
+
+        // Written through the real config path, so the file itself is checked.
+        Path directory = root.resolve("plus");
+        ConfigFile file = new ConfigFile(directory, settings.fileName());
+        JsonObject onDisk = new JsonObject();
+        settings.write(onDisk);
+        file.save(onDisk);
+        String contents = read(directory.resolve("plus.json"));
+        check("the file lands on disk", !contents.isEmpty());
+        check("the file names the badge style", contents.contains("BRACKET"));
+
+        PlusSettings reloaded = new PlusSettings();
+        reloaded.read(file.load());
+        check("a real round trip through the file works",
+                reloaded.badgeStyle.get() == PlusSettings.BadgeStyle.BRACKET);
+
+        settings.resetAll();
+        check("reset clears the badge style",
+                settings.badgeStyle.get() == PlusSettings.BadgeStyle.PLAIN);
+        check("reset clears the effects", settings.nametag().effects.enabledCount() == 0);
+        check("reset clears the extra line",
+                settings.nametag().additional.resolvedText().isEmpty());
+    }
+
+    static void testRemoteEntitlementProvider() throws Exception {
+        section("remote entitlement provider");
+
+        // -- parsing, offline and deterministic -------------------------------
+        UUID alice = UUID.randomUUID();
+        String good = "{\"entitlements\":{\"" + alice
+                + "\":[\"NEBREL_PLUS\",\"NEBREL_PLUS_BADGE\"]}}";
+        Map<UUID, Set<NebrelEntitlement>> parsed = RemoteEntitlementProvider.parse(good);
+        check("a well-formed document parses", parsed != null);
+        check("the named player's entitlements are read",
+                parsed.get(alice).contains(NebrelEntitlement.NEBREL_PLUS)
+                        && parsed.get(alice).contains(NebrelEntitlement.NEBREL_PLUS_BADGE));
+
+        check("a non-object body fails to parse", RemoteEntitlementProvider.parse("[1,2,3]") == null);
+        check("a missing entitlements key fails to parse",
+                RemoteEntitlementProvider.parse("{\"other\":1}") == null);
+        check("garbage text fails to parse", RemoteEntitlementProvider.parse("not json") == null);
+        Map<UUID, Set<NebrelEntitlement>> empty =
+                RemoteEntitlementProvider.parse("{\"entitlements\":{}}");
+        check("an empty but well-formed document parses to empty",
+                empty != null && empty.isEmpty());
+
+        String unknownName = "{\"entitlements\":{\"" + alice
+                + "\":[\"NEBREL_PLUS\",\"MADE_UP_THING\"]}}";
+        Map<UUID, Set<NebrelEntitlement>> withUnknown = RemoteEntitlementProvider.parse(unknownName);
+        check("an unknown entitlement name is skipped, not fatal",
+                withUnknown != null && withUnknown.get(alice).size() == 1
+                        && withUnknown.get(alice).contains(NebrelEntitlement.NEBREL_PLUS));
+
+        String badUuid = "{\"entitlements\":{\"not-a-uuid\":[\"NEBREL_PLUS\"],\"" + alice
+                + "\":[\"NEBREL_PLUS\"]}}";
+        Map<UUID, Set<NebrelEntitlement>> withBadUuid = RemoteEntitlementProvider.parse(badUuid);
+        check("a malformed UUID entry is skipped, not fatal",
+                withBadUuid != null && withBadUuid.size() == 1 && withBadUuid.containsKey(alice));
+
+        String allUnknown = "{\"entitlements\":{\"" + alice + "\":[\"NOT_REAL\"]}}";
+        Map<UUID, Set<NebrelEntitlement>> allUnknownParsed =
+                RemoteEntitlementProvider.parse(allUnknown);
+        check("a player left with no real entitlements is dropped entirely",
+                allUnknownParsed != null && allUnknownParsed.isEmpty());
+
+        // -- the provider unconfigured -----------------------------------------
+        PlusSettings settings = new PlusSettings();
+        RemoteEntitlementProvider provider = new RemoteEntitlementProvider(settings);
+        check("not authoritative - a hosted list is not a verified account",
+                !provider.authoritative());
+        check("unconfigured by default", !provider.configured());
+        check("an unconfigured provider answers nothing", provider.entitlementsOf(alice).isEmpty());
+        check("a null player answers nothing", provider.entitlementsOf(null).isEmpty());
+        provider.refresh();
+        check("refresh with no URL does nothing", provider.knownPlayerCount() == 0);
+
+        // -- a real fetch over real HTTP, on loopback ---------------------------
+        // This is the property that actually matters: not that the parser is
+        // correct in isolation, but that a genuine network round trip lands in
+        // entitlementsOf(). A provider that merely claimed to fetch would pass
+        // every assertion above and fail every one of these.
+        UUID bob = UUID.randomUUID();
+        String body = "{\"entitlements\":{\"" + bob + "\":[\"NEBREL_PLUS_BADGE\"]}}";
+        byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+        AtomicInteger hits = new AtomicInteger();
+
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/entitlements.json", exchange -> {
+            hits.incrementAndGet();
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, payload.length);
+            try (var out = exchange.getResponseBody()) {
+                out.write(payload);
+            }
+        });
+        server.start();
+        try {
+            int port = server.getAddress().getPort();
+            settings.remoteEntitlementsUrl.set("http://127.0.0.1:" + port + "/entitlements.json");
+            RemoteEntitlementProvider live = new RemoteEntitlementProvider(settings);
+            check("configured once a URL is set", live.configured());
+
+            live.refresh();
+            boolean sawIt = false;
+            for (int i = 0; i < 60 && !sawIt; i++) {
+                Thread.sleep(50L);
+                sawIt = live.entitlementsOf(bob).contains(NebrelEntitlement.NEBREL_PLUS_BADGE);
+            }
+            check("a real HTTP fetch populates the cache", sawIt);
+            check("knownPlayerCount reflects the fetch", live.knownPlayerCount() == 1);
+            check("a player the document never named stays empty",
+                    live.entitlementsOf(UUID.randomUUID()).isEmpty());
+            check("exactly one request was made for one refresh", hits.get() == 1);
+
+            // The floor between real fetches must hold: asking again right away
+            // must not reach the server a second time.
+            live.refresh();
+            check("a second immediate refresh is throttled, not fetched", hits.get() == 1);
+            check("the cache from the first fetch is unaffected",
+                    live.entitlementsOf(bob).contains(NebrelEntitlement.NEBREL_PLUS_BADGE));
+
+            // -- failure is quiet, not fatal -------------------------------------
+            settings.remoteEntitlementsUrl.set("http://127.0.0.1:1/definitely-nothing-here");
+            RemoteEntitlementProvider unreachable = new RemoteEntitlementProvider(settings);
+            unreachable.refresh();
+            Thread.sleep(250L);
+            check("a connection failure leaves the provider answering nothing, not throwing",
+                    unreachable.entitlementsOf(bob).isEmpty());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    static void testPixelIcons() {
+        section("pixel icons");
+
+        check("every shipped icon is square and the same size", Icons.ALL_ICONS.values().stream()
+                .allMatch(icon -> icon.size() == Icons.ALL.size()));
+        check("every shipped icon actually draws something",
+                Icons.ALL_ICONS.values().stream().allMatch(PixelIcon::hasContent));
+        check("forty-three icons ship", Icons.ALL_ICONS.size() == 43);
+
+        // -- the constructor's own validation ---------------------------------
+        check("a non-square grid is rejected",
+                throwsIllegalArgument(() -> new PixelIcon("bad", "###", "###")));
+        check("rows of differing length are rejected",
+                throwsIllegalArgument(() -> new PixelIcon("bad", "###", "##", "###")));
+        check("a stray character is rejected",
+                throwsIllegalArgument(() -> new PixelIcon("bad", "#X#", "###", "###")));
+        check("id cannot be blank",
+                throwsIllegalArgument(() -> new PixelIcon("  ", "#")));
+
+        // -- runsInRow: the piece the draw call actually leans on -------------
+        PixelIcon single = new PixelIcon("single", "#.#", "...", ".#.");
+        check("an isolated filled cell is its own run",
+                java.util.Arrays.equals(single.runsInRow(0), new int[]{0, 1, 2, 3}));
+        check("an empty row has no runs", single.runsInRow(1).length == 0);
+        check("a middle cell is a run of one",
+                java.util.Arrays.equals(single.runsInRow(2), new int[]{1, 2}));
+
+        PixelIcon fullRow = new PixelIcon("full", "###", "###", "###");
+        check("a fully filled row is a single run",
+                java.util.Arrays.equals(fullRow.runsInRow(0), new int[]{0, 3}));
+
+        check("filled() reads the same grid runsInRow walks",
+                single.filled(0, 0) && !single.filled(0, 1) && single.filled(2, 1));
+
+        // -- the module fallback: bespoke icon or the module's own glyph ------
+        check("Nebrel HUD gets its bespoke icon", Icons.forModuleId("nebrel_hud") == Icons.HUD);
+        check("Custom Nametags gets its bespoke icon",
+                Icons.forModuleId("custom_nametags") == Icons.TAG);
+        check("Full Bright gets its bespoke icon", Icons.forModuleId("fullbright") == Icons.SUN);
+        check("Free Look gets its bespoke icon", Icons.forModuleId("freelook") == Icons.VISUAL);
+        check("Auto Text gets its bespoke icon", Icons.forModuleId("auto_text") == Icons.CHAT);
+        check("Tiers gets its bespoke icon", Icons.forModuleId("tiers") == Icons.BARS);
+        check("Hitbox gets its bespoke icon", Icons.forModuleId("hitbox") == Icons.BOUNDS);
+        check("Keystrokes gets its bespoke icon", Icons.forModuleId("keystrokes") == Icons.WASD);
+        check("Crosshair gets its bespoke icon", Icons.forModuleId("crosshair") == Icons.CROSSHAIR);
+        check("No Fog gets its bespoke icon", Icons.forModuleId("no_fog") == Icons.NO_FOG);
+        check("Health Indicators gets its bespoke icon",
+                Icons.forModuleId("health_indicators") == Icons.HEART_BAR);
+        check("Damage Tint gets its bespoke icon",
+                Icons.forModuleId("damage_tint") == Icons.HEART_FLASH);
+        check("Quests gets its bespoke icon", Icons.forModuleId("quests") == Icons.CLIPBOARD);
+        check("Toggle Sprint gets its bespoke icon",
+                Icons.forModuleId("toggle_sprint") == Icons.FORWARD);
+        check("Screen Dim gets its bespoke icon", Icons.forModuleId("blur") == Icons.BLUR_RINGS);
+        check("Time Changer gets its bespoke icon", Icons.forModuleId("time_changer") == Icons.CLOCK);
+        check("Weather Changer gets its bespoke icon",
+                Icons.forModuleId("weather_changer") == Icons.CLOUD_RAIN);
+        check("FOV Changer gets its bespoke icon", Icons.forModuleId("fov_changer") == Icons.EYE);
+        check("Item Highlighter gets its bespoke icon",
+                Icons.forModuleId("item_highlighter") == Icons.FOCUS);
+        check("Borderless Window gets its bespoke icon",
+                Icons.forModuleId("borderless_window") == Icons.WINDOW);
+        check("Arrow Trail gets its bespoke icon",
+                Icons.forModuleId("arrow_trail") == Icons.ARROW_TRAIL);
+        check("Glint Colorizer gets its bespoke icon",
+                Icons.forModuleId("glint_colorizer") == Icons.SPARKLE);
+        check("Item Model gets its bespoke icon",
+                Icons.forModuleId("item_model") == Icons.AXES_DIAMOND);
+        check("3D Skin Layers gets its bespoke icon",
+                Icons.forModuleId("skin_layers_3d") == Icons.LAYERS);
+        check("Wavey Capes gets its bespoke icon", Icons.forModuleId("wavey_capes") == Icons.CAPE);
+        check("Shulker Tooltip gets its bespoke icon",
+                Icons.forModuleId("shulker_tooltip") == Icons.CRATE_GRID);
+        check("Pack Tweaks gets its bespoke icon",
+                Icons.forModuleId("pack_tweaks") == Icons.CRATE_GEAR);
+        check("Overflow Particles gets its bespoke icon",
+                Icons.forModuleId("overflow_particles") == Icons.SPARKLES_SCATTER);
+        check("Vanilla HUD gets its bespoke icon",
+                Icons.forModuleId("vanilla_hud") == Icons.STATUS_ROWS);
+        check("Food Details gets its bespoke icon", Icons.forModuleId("appleskin") == Icons.APPLE);
+        check("TNT Timer gets its bespoke icon", Icons.forModuleId("tnt_timer") == Icons.CRATE_FUSE);
+        check("Animations gets its bespoke icon",
+                Icons.forModuleId("animations") == Icons.MOTION_LINES);
+        check("every one of the 32 modules now has a bespoke icon",
+                java.util.stream.Stream.of(
+                        "nebrel_hud", "keystrokes", "appleskin", "tnt_timer", "vanilla_hud",
+                        "crosshair", "fullbright", "fov_changer", "damage_tint", "animations",
+                        "arrow_trail", "toggle_sprint", "freelook", "time_changer", "weather_changer",
+                        "no_fog", "blur", "glint_colorizer", "item_model", "custom_nametags",
+                        "health_indicators", "hitbox", "item_highlighter", "overflow_particles",
+                        "skin_layers_3d", "wavey_capes", "auto_text", "shulker_tooltip",
+                        "pack_tweaks", "borderless_window", "tiers", "quests")
+                        .allMatch(id -> Icons.forModuleId(id) != null));
+        check("an unknown id is null, not an exception",
+                Icons.forModuleId("not_a_real_module") == null);
+    }
+
+    /** True when constructing {@code action} throws {@link IllegalArgumentException}. */
+    static boolean throwsIllegalArgument(Runnable action) {
+        try {
+            action.run();
+            return false;
+        } catch (IllegalArgumentException expected) {
+            return true;
+        }
+    }
+
+    /** True when {@code action} throws, used for immutability checks. */
+    static boolean unmodifiable(Runnable action) {
+        try {
+            action.run();
+            return false;
+        } catch (RuntimeException expected) {
+            return true;
+        }
+    }
 
     static void section(String name) {
         System.out.println("-- " + name);

@@ -7,6 +7,8 @@ import de.nebrel.client.module.ModuleManager;
 import de.nebrel.client.render.RenderUtil;
 import de.nebrel.client.render.animation.Animation;
 import de.nebrel.client.render.animation.Easing;
+import de.nebrel.client.render.icon.Icons;
+import de.nebrel.client.render.icon.PixelIcon;
 import de.nebrel.client.setting.KeybindSetting;
 import de.nebrel.client.util.ColorUtil;
 import net.minecraft.client.gui.DrawContext;
@@ -22,9 +24,9 @@ import java.util.function.Consumer;
  */
 public final class ModuleCardComponent extends Component {
 
-    public static final float HEIGHT = 52.0F;
-    private static final float PADDING = 10.0F;
-    private static final float ICON_SIZE = 22.0F;
+    public static final float HEIGHT = 68.0F;
+    private static final float PADDING = 14.0F;
+    private static final float ICON_SIZE = 28.0F;
 
     private final Module module;
     private final ModuleManager modules;
@@ -104,11 +106,20 @@ public final class ModuleCardComponent extends Component {
         int iconBackground = ColorUtil.lerp(theme.surfaceElevated, theme.accentSoft, onAmount);
         RenderUtil.roundedRect(context, iconX, iconY, ICON_SIZE, ICON_SIZE, 6.0F, iconBackground);
         int iconColor = ColorUtil.lerp(theme.textSecondary, theme.accent, onAmount);
-        RenderUtil.textCentered(context, this.module.icon(), iconX + ICON_SIZE / 2.0F,
-                iconY + (ICON_SIZE - RenderUtil.lineHeight()) / 2.0F + 1.0F, iconColor);
+        PixelIcon bitmap = Icons.forModuleId(this.module.id());
+        if (bitmap != null) {
+            // Hand-drawn icons are shipped for a handful of modules; the rest
+            // keep the single-glyph icon they always had.
+            float bitmapSize = ICON_SIZE - 6.0F;
+            RenderUtil.icon(context, bitmap, iconX + (ICON_SIZE - bitmapSize) / 2.0F,
+                    iconY + (ICON_SIZE - bitmapSize) / 2.0F, bitmapSize, iconColor);
+        } else {
+            RenderUtil.textCentered(context, this.module.icon(), iconX + ICON_SIZE / 2.0F,
+                    iconY + (ICON_SIZE - RenderUtil.lineHeight()) / 2.0F + 1.0F, iconColor);
+        }
 
-        float textX = iconX + ICON_SIZE + 9.0F;
-        float textRight = this.x + this.width - PADDING - ToggleComponent.TRACK_WIDTH - 10.0F;
+        float textX = iconX + ICON_SIZE + 12.0F;
+        float textRight = this.x + this.width - PADDING - ToggleComponent.TRACK_WIDTH - 12.0F;
         int textBudget = (int) Math.max(20.0F, textRight - textX);
 
         boolean showDescription = this.ui.settings().showDescriptions.get()
@@ -123,7 +134,7 @@ public final class ModuleCardComponent extends Component {
         if (showDescription) {
             RenderUtil.textScaled(context,
                     RenderUtil.truncate(this.module.description(), (int) (textBudget / 0.85F)),
-                    textX, nameY + RenderUtil.lineHeight() + 2.0F, 0.85F, theme.textSecondary, false);
+                    textX, nameY + RenderUtil.lineHeight() + 4.0F, 0.85F, theme.textSecondary, false);
         }
 
         // Keybind chip, only when one is actually bound.
@@ -155,7 +166,7 @@ public final class ModuleCardComponent extends Component {
         }
 
         this.toggle.setBounds(this.x + this.width - PADDING - ToggleComponent.TRACK_WIDTH,
-                this.y + (this.height - ToggleComponent.TRACK_HEIGHT) / 2.0F + 8.0F,
+                this.y + (this.height - ToggleComponent.TRACK_HEIGHT) / 2.0F,
                 ToggleComponent.TRACK_WIDTH, ToggleComponent.TRACK_HEIGHT);
         this.toggle.render(context, mouseX, mouseY, delta);
     }

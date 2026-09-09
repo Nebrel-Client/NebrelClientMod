@@ -33,11 +33,22 @@ SOURCES="${WORK}/sources.txt"
   find "${ROOT}/src/main/java/de/nebrel/client/config" -name '*.java'
   find "${ROOT}/src/main/java/de/nebrel/client/gui/theme" -name '*.java'
   find "${ROOT}/src/main/java/de/nebrel/client/render/animation" -name '*.java'
+  find "${ROOT}/src/main/java/de/nebrel/client/render/icon" -name '*.java'
   find "${ROOT}/src/main/java/de/nebrel/client/util" -name '*.java'
   echo "${ROOT}/src/main/java/de/nebrel/client/module/Module.java"
   echo "${ROOT}/src/main/java/de/nebrel/client/module/ModuleCategory.java"
   echo "${ROOT}/src/main/java/de/nebrel/client/module/ModuleManager.java"
   echo "${ROOT}/src/main/java/de/nebrel/client/hud/HudAnchor.java"
+  # Nebrel+. The entitlement, badge, profile and nametag-effect layers are
+  # Minecraft-free by design, and so is IdentityRenderer: it draws through the
+  # GlyphSink interface rather than a text renderer, which is what lets the same
+  # effect pipeline serve the world, the HUD and this test.
+  find "${ROOT}/src/main/java/de/nebrel/client/plus" -name '*.java' \
+      -not -name 'NebrelPlus.java' \
+      -not -name 'HudGlyphSink.java' \
+      -not -name 'IdentityText.java' \
+      -not -name 'NametagCoordinator.java' \
+      -not -name 'WorldGlyphSink.java'
   echo "${ROOT}/tools/coretest/CoreSelfTest.java"
 } > "${SOURCES}"
 

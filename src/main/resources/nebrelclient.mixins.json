@@ -9,6 +9,7 @@
   "client": [
     "BackgroundRendererMixin",
     "CameraMixin",
+    "ChatHudMixin",
     "EntityRendererMixin",
     "GameRendererMixin",
     "HeldItemRendererMixin",
@@ -16,6 +17,7 @@
     "ItemRendererMixin",
     "LivingEntityMixin",
     "ParticleManagerMixin",
+    "PlayerListHudMixin",
     "SimpleOptionAccessor"
   ]
 }

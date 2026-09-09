@@ -53,6 +53,7 @@ public final class NebrelClientMod implements ClientModInitializer {
             // module that runs afterwards.
             client.keybinds().tick(minecraft);
             stats.onTick(minecraft);
+            client.plus().tick(minecraft);
             client.notifications().tick();
             client.dispatcher().dispatchTick(minecraft);
             client.config().tick();

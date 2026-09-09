@@ -117,7 +117,11 @@ public final class Modules {
         modules.register(new BlurModule());
         modules.register(new GlintColorizerModule());
         modules.register(new ItemModelModule());
-        modules.register(new CustomNametagsModule());
+        CustomNametagsModule nametags = modules.register(new CustomNametagsModule());
+        // The module describes the plate; the coordinator draws it, together
+        // with whatever Nebrel+ contributes to the same label.
+        client.plus().nametagCoordinator().setStyleSupplier(nametags::style);
+        client.plus().nametagCoordinator().setSuffixSupplier(nametags::suffixFor);
         modules.register(new HealthIndicatorsModule());
         modules.register(new HitboxModule());
         modules.register(new ItemHighlighterModule());

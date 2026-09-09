@@ -193,9 +193,19 @@ def check_called_names(sources, members) -> list[str]:
     declaration = re.compile(
         r"^\s*(?:public|private|protected|static|final|abstract|synchronized|\s)*"
         r"[\w<>\[\],.?\s]+\s+([a-z][A-Za-z0-9_]*)\s*\(", re.MULTILINE)
+    # Record accessors are implicit, so the declaration pattern never sees them.
+    # Take the component names out of the header instead.
+    record_header = re.compile(r"\brecord\s+\w+\s*\(([^)]*)\)", re.DOTALL)
+    component = re.compile(r"([a-z][A-Za-z0-9_]*)\s*(?:,|$)")
     for path in sources:
-        for match in declaration.finditer(path.read_text(encoding="utf-8")):
+        text = path.read_text(encoding="utf-8")
+        for match in declaration.finditer(text):
             own_names.add(match.group(1))
+        for match in record_header.finditer(text):
+            for part in match.group(1).split(","):
+                trailing = component.search(part.strip())
+                if trailing:
+                    own_names.add(trailing.group(1))
 
     # Members of libraries that are not obfuscated and so never appear in Yarn:
     # the JDK, Gson, SLF4J, LWJGL/GLFW, blaze3d, the Mixin API and Fabric Loader.
@@ -252,6 +262,12 @@ def check_called_names(sources, members) -> list[str]:
         "matches", "entrySet", "sorted", "collect", "filter", "count", "anyMatch",
         "unmodifiableSet", "unmodifiableList", "addProperty", "toMillis", "setValue",
         "getAsFloat", "sleep", "arraycopy", "deepToString", "getDuration",
+        "isISOControl", "isWhitespace", "ordinal", "repeat", "codePointAt",
+        "computeIfPresent", "getOrCreate", "toUnmodifiableList",
+        # java.net.http, java.time and Gson's JsonParser - RemoteEntitlementProvider
+        "connectTimeout", "followRedirects", "sendAsync", "thenAccept",
+        "exceptionally", "whenComplete", "ofSeconds", "parseString",
+        "unmodifiableMap", "newBuilder", "timeout",
     }
 
     # Calls on a receiver: something.name(
