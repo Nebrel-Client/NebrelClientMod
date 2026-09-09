@@ -113,7 +113,7 @@ public final class PlusPageView {
     }
 
     private float statusCardHeight() {
-        return 56.0F;
+        return this.plus.remoteEntitlements().configured() ? 68.0F : 56.0F;
     }
 
     /** Membership state, said plainly including where the answer came from. */
@@ -160,6 +160,19 @@ public final class PlusPageView {
                 ? "Not in a world"
                 : this.plus.localPlayerName();
         RenderUtil.textScaled(context, player, textX, top + 40.0F, 0.8F, theme.textDisabled, false);
+
+        // Separate from "source" above: this line is about whether OTHER
+        // players can see this member's badge at all, which local
+        // Development Mode never achieves by itself (LocalEntitlementProvider
+        // only ever answers for this machine's own player).
+        if (this.plus.remoteEntitlements().configured()) {
+            int known = this.plus.remoteEntitlements().knownPlayerCount();
+            String sharedLine = known > 0
+                    ? "Shared list active — " + known + " player(s) known, unverified."
+                    : "Shared list configured — fetching...";
+            RenderUtil.textScaled(context, sharedLine, textX, top + 52.0F, 0.8F,
+                    theme.textDisabled, false);
+        }
         return top + cardHeight;
     }
 

@@ -35,21 +35,21 @@ compiler. Both currently pass:
 
 ```
 $ ./tools/verify-core.sh
-Compiling 64 source files ...
-PASS  420 checks
+Compiling 65 source files ...
+PASS  442 checks
 
 $ ./tools/check-mappings.py
 Loaded 6900 classes and 35817 member names
-Checking 172 source files
+Checking 173 source files
 OK  every Minecraft type and member name resolves against the mappings
 ```
 
 - **`tools/verify-core.sh`** really compiles the Minecraft-independent half —
   settings, config, module registry, theme, animation, HUD geometry, and the
-  whole Nebrel+ engine — with a plain JDK and runs 420 assertions against it.
+  whole Nebrel+ engine — with a plain JDK and runs 442 assertions against it.
   No Minecraft, no Loom.
 - **`tools/check-mappings.py`** checks every Minecraft type and member name in
-  all 172 source files against the official Yarn 1.21.1 mappings, including
+  all 173 source files against the official Yarn 1.21.1 mappings, including
   mixin targets and injector method names.
 
 Between them they caught six real bugs while this was being written; see
@@ -191,14 +191,30 @@ actually need — `NEBREL_PLUS_BADGE`, `NAMETAG_DESIGNER` — through
 `EntitlementService`, which merges answers from a list of providers and caches
 them for five seconds.
 
-Today the only provider is `LocalEntitlementProvider`, which grants the
-implemented entitlements to the local player when Development Mode is on, and
-reports `authoritative() == false`. **It is deliberately not a security
-boundary**, and it would be dishonest to imply otherwise: anyone can edit
-`plus.json`. Real membership has to come from a `RemoteEntitlementProvider`
-answering from a Nebrel backend, and until one exists the Nebrel+ page says
-"Granted locally by Development Mode. Not a real membership." rather than
-"ACTIVE" with no qualification.
+Two providers ship. `LocalEntitlementProvider` grants the implemented
+entitlements to the local player when Development Mode is on, and reports
+`authoritative() == false`. **It is deliberately not a security boundary**, and
+it would be dishonest to imply otherwise: anyone can edit `plus.json`. Real
+membership has to come from a verified Nebrel backend, and until one exists the
+Nebrel+ page says "Granted locally by Development Mode. Not a real membership."
+rather than "ACTIVE" with no qualification.
+
+`RemoteEntitlementProvider` closes a gap worth being exact about: local
+development grants only ever apply to *your own* player, by design — one
+machine has no way to know what another machine's player has locally granted
+itself, and a client mod cannot ask another player's client anything directly
+(a plain server relays nothing between two Fabric clients on its own). Without
+something in between, "everyone running Nebrel Client sees each other's badge"
+does not actually happen; each player only ever saw their own. This provider
+reads a small JSON document from a URL (Advanced → Shared Entitlement List) —
+hosted by a community, a server, or eventually Nebrel itself — naming which
+players hold which entitlements, and merges it in exactly like any other
+provider. **No Minecraft server needs to change**; every client fetches
+independently. It stays `authoritative() == false` too: whoever controls the
+URL can name any player, unverified, which is a real step up from a player
+editing their own `plus.json` (the subject cannot self-grant this way) but is
+still not the verified account the architecture is built toward, and the
+Nebrel+ page says so rather than calling it "verified."
 
 ### One renderer, four surfaces
 

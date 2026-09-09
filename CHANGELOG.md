@@ -4,6 +4,19 @@ All notable changes to Nebrel Client are recorded here. Versions follow
 `major.minor.patch`; the mod version is templated from `gradle.properties`
 (`mod_version`) into `fabric.mod.json` at build time.
 
+## 26.3
+
+- `RemoteEntitlementProvider`: reads a JSON entitlement list from a URL
+  (Advanced → Shared Entitlement List), so players running Nebrel Client can
+  see each other's badge without any Minecraft server needing to change.
+  Corrects an earlier overclaim: `LocalEntitlementProvider` only ever
+  answers for the local machine's own player, so two separate Nebrel Client
+  installs previously had no way to learn about each other at all — each
+  only ever saw its own badge. Not authoritative; the Nebrel+ page says so.
+- Core self-test extended to 442 assertions, including a real HTTP round
+  trip against a local loopback server (fetch, cache, throttle floor, and
+  fail-closed behaviour on a bad or unreachable URL).
+
 ## 26.2
 
 - Nebrel+ page and nametag designer: live preview (World / Tab List / Chat

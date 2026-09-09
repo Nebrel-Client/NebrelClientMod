@@ -31,6 +31,7 @@ public final class NebrelPlus {
     private final PlusSettings settings;
     private final EntitlementService entitlements = new EntitlementService();
     private final LocalEntitlementProvider localProvider;
+    private final RemoteEntitlementProvider remoteProvider;
     private final BadgeService badges;
     private final PlayerProfileCache profiles;
     private final IdentityRenderer identityRenderer;
@@ -51,6 +52,9 @@ public final class NebrelPlus {
         this.localProvider = new LocalEntitlementProvider(settings);
         this.entitlements.addProvider(this.localProvider);
 
+        this.remoteProvider = new RemoteEntitlementProvider(settings);
+        this.entitlements.addProvider(this.remoteProvider);
+
         this.badges = new BadgeService(this.entitlements, settings);
         this.profiles = new PlayerProfileCache(this.entitlements, this.badges, settings);
         this.profiles.setLocalPlayerSupplier(() -> this.localPlayerId);
@@ -69,6 +73,13 @@ public final class NebrelPlus {
         }
         settings.developmentMode.onChange(value -> invalidateCaches());
         settings.badgeEnabled.onChange(value -> invalidateCaches());
+        // A newly typed URL should not wait out the 5-minute refresh floor:
+        // dropping the provider's own state clears that floor too, so the
+        // next tick fetches right away.
+        settings.remoteEntitlementsUrl.onChange(value -> {
+            this.remoteProvider.invalidate();
+            invalidateCaches();
+        });
     }
 
     /**
@@ -94,6 +105,10 @@ public final class NebrelPlus {
 
     public BadgeService badges() {
         return this.badges;
+    }
+
+    public RemoteEntitlementProvider remoteEntitlements() {
+        return this.remoteProvider;
     }
 
     public PlayerProfileCache profiles() {

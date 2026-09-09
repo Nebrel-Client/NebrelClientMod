@@ -28,6 +28,7 @@ import de.nebrel.client.plus.EntitlementService;
 import de.nebrel.client.plus.LocalEntitlementProvider;
 import de.nebrel.client.plus.NebrelEntitlement;
 import de.nebrel.client.plus.PlusSettings;
+import de.nebrel.client.plus.RemoteEntitlementProvider;
 import de.nebrel.client.plus.badge.BadgeService;
 import de.nebrel.client.plus.badge.NebrelBadge;
 import de.nebrel.client.plus.nametag.AdditionalNametag;
@@ -43,13 +44,18 @@ import de.nebrel.client.plus.render.IdentityRenderer;
 import de.nebrel.client.util.ColorUtil;
 import de.nebrel.client.util.NebrelMath;
 
+import com.sun.net.httpserver.HttpServer;
+
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Headless verification for the Minecraft-independent half of Nebrel Client.
@@ -133,6 +139,7 @@ public final class CoreSelfTest {
             testEffectPipeline();
             testIdentityRendering();
             testPlusConfigRoundTrip(temp);
+            testRemoteEntitlementProvider();
         } finally {
             deleteTree(temp);
         }
@@ -1537,6 +1544,115 @@ public final class CoreSelfTest {
         check("reset clears the effects", settings.nametag().effects.enabledCount() == 0);
         check("reset clears the extra line",
                 settings.nametag().additional.resolvedText().isEmpty());
+    }
+
+    static void testRemoteEntitlementProvider() throws Exception {
+        section("remote entitlement provider");
+
+        // -- parsing, offline and deterministic -------------------------------
+        UUID alice = UUID.randomUUID();
+        String good = "{\"entitlements\":{\"" + alice
+                + "\":[\"NEBREL_PLUS\",\"NEBREL_PLUS_BADGE\"]}}";
+        Map<UUID, Set<NebrelEntitlement>> parsed = RemoteEntitlementProvider.parse(good);
+        check("a well-formed document parses", parsed != null);
+        check("the named player's entitlements are read",
+                parsed.get(alice).contains(NebrelEntitlement.NEBREL_PLUS)
+                        && parsed.get(alice).contains(NebrelEntitlement.NEBREL_PLUS_BADGE));
+
+        check("a non-object body fails to parse", RemoteEntitlementProvider.parse("[1,2,3]") == null);
+        check("a missing entitlements key fails to parse",
+                RemoteEntitlementProvider.parse("{\"other\":1}") == null);
+        check("garbage text fails to parse", RemoteEntitlementProvider.parse("not json") == null);
+        Map<UUID, Set<NebrelEntitlement>> empty =
+                RemoteEntitlementProvider.parse("{\"entitlements\":{}}");
+        check("an empty but well-formed document parses to empty",
+                empty != null && empty.isEmpty());
+
+        String unknownName = "{\"entitlements\":{\"" + alice
+                + "\":[\"NEBREL_PLUS\",\"MADE_UP_THING\"]}}";
+        Map<UUID, Set<NebrelEntitlement>> withUnknown = RemoteEntitlementProvider.parse(unknownName);
+        check("an unknown entitlement name is skipped, not fatal",
+                withUnknown != null && withUnknown.get(alice).size() == 1
+                        && withUnknown.get(alice).contains(NebrelEntitlement.NEBREL_PLUS));
+
+        String badUuid = "{\"entitlements\":{\"not-a-uuid\":[\"NEBREL_PLUS\"],\"" + alice
+                + "\":[\"NEBREL_PLUS\"]}}";
+        Map<UUID, Set<NebrelEntitlement>> withBadUuid = RemoteEntitlementProvider.parse(badUuid);
+        check("a malformed UUID entry is skipped, not fatal",
+                withBadUuid != null && withBadUuid.size() == 1 && withBadUuid.containsKey(alice));
+
+        String allUnknown = "{\"entitlements\":{\"" + alice + "\":[\"NOT_REAL\"]}}";
+        Map<UUID, Set<NebrelEntitlement>> allUnknownParsed =
+                RemoteEntitlementProvider.parse(allUnknown);
+        check("a player left with no real entitlements is dropped entirely",
+                allUnknownParsed != null && allUnknownParsed.isEmpty());
+
+        // -- the provider unconfigured -----------------------------------------
+        PlusSettings settings = new PlusSettings();
+        RemoteEntitlementProvider provider = new RemoteEntitlementProvider(settings);
+        check("not authoritative - a hosted list is not a verified account",
+                !provider.authoritative());
+        check("unconfigured by default", !provider.configured());
+        check("an unconfigured provider answers nothing", provider.entitlementsOf(alice).isEmpty());
+        check("a null player answers nothing", provider.entitlementsOf(null).isEmpty());
+        provider.refresh();
+        check("refresh with no URL does nothing", provider.knownPlayerCount() == 0);
+
+        // -- a real fetch over real HTTP, on loopback ---------------------------
+        // This is the property that actually matters: not that the parser is
+        // correct in isolation, but that a genuine network round trip lands in
+        // entitlementsOf(). A provider that merely claimed to fetch would pass
+        // every assertion above and fail every one of these.
+        UUID bob = UUID.randomUUID();
+        String body = "{\"entitlements\":{\"" + bob + "\":[\"NEBREL_PLUS_BADGE\"]}}";
+        byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+        AtomicInteger hits = new AtomicInteger();
+
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/entitlements.json", exchange -> {
+            hits.incrementAndGet();
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, payload.length);
+            try (var out = exchange.getResponseBody()) {
+                out.write(payload);
+            }
+        });
+        server.start();
+        try {
+            int port = server.getAddress().getPort();
+            settings.remoteEntitlementsUrl.set("http://127.0.0.1:" + port + "/entitlements.json");
+            RemoteEntitlementProvider live = new RemoteEntitlementProvider(settings);
+            check("configured once a URL is set", live.configured());
+
+            live.refresh();
+            boolean sawIt = false;
+            for (int i = 0; i < 60 && !sawIt; i++) {
+                Thread.sleep(50L);
+                sawIt = live.entitlementsOf(bob).contains(NebrelEntitlement.NEBREL_PLUS_BADGE);
+            }
+            check("a real HTTP fetch populates the cache", sawIt);
+            check("knownPlayerCount reflects the fetch", live.knownPlayerCount() == 1);
+            check("a player the document never named stays empty",
+                    live.entitlementsOf(UUID.randomUUID()).isEmpty());
+            check("exactly one request was made for one refresh", hits.get() == 1);
+
+            // The floor between real fetches must hold: asking again right away
+            // must not reach the server a second time.
+            live.refresh();
+            check("a second immediate refresh is throttled, not fetched", hits.get() == 1);
+            check("the cache from the first fetch is unaffected",
+                    live.entitlementsOf(bob).contains(NebrelEntitlement.NEBREL_PLUS_BADGE));
+
+            // -- failure is quiet, not fatal -------------------------------------
+            settings.remoteEntitlementsUrl.set("http://127.0.0.1:1/definitely-nothing-here");
+            RemoteEntitlementProvider unreachable = new RemoteEntitlementProvider(settings);
+            unreachable.refresh();
+            Thread.sleep(250L);
+            check("a connection failure leaves the provider answering nothing, not throwing",
+                    unreachable.entitlementsOf(bob).isEmpty());
+        } finally {
+            server.stop(0);
+        }
     }
 
     /** True when {@code action} throws, used for immutability checks. */

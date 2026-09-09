@@ -10,6 +10,7 @@ import de.nebrel.client.setting.EnumSetting;
 import de.nebrel.client.setting.NumberSetting;
 import de.nebrel.client.setting.Setting;
 import de.nebrel.client.setting.SettingSection;
+import de.nebrel.client.setting.StringSetting;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -92,6 +93,14 @@ public final class PlusSettings implements ConfigSection {
 
     public final BooleanSetting developmentMode;
 
+    /**
+     * A shared entitlement list this client will also trust, so a badge
+     * survives past the local machine without any Minecraft server needing to
+     * change. See {@link RemoteEntitlementProvider} for the shape it expects
+     * and why this is not the same thing as a verified Nebrel account.
+     */
+    public final StringSetting remoteEntitlementsUrl;
+
     private final NametagProfile nametag = new NametagProfile();
 
     public PlusSettings() {
@@ -152,6 +161,17 @@ public final class PlusSettings implements ConfigSection {
                         + "Local only; a real membership will come from the Nebrel backend.",
                 true));
         this.developmentMode.section(SettingSection.ADVANCED);
+
+        // Empty by default: the provider that reads this does nothing at all
+        // until a URL is set, so shipping it changes nothing for anyone who
+        // has not opted in.
+        this.remoteEntitlementsUrl = add(new StringSetting("plus.remoteEntitlementsUrl",
+                "Shared Entitlement List",
+                "A URL a server or community can host so players running Nebrel Client "
+                        + "see each other's badge, without any Minecraft server needing to "
+                        + "change. Not the same as a verified Nebrel account.",
+                "", 512));
+        this.remoteEntitlementsUrl.section(SettingSection.ADVANCED);
     }
 
     private <S extends Setting<?>> S add(S setting) {

@@ -264,6 +264,10 @@ def check_called_names(sources, members) -> list[str]:
         "getAsFloat", "sleep", "arraycopy", "deepToString", "getDuration",
         "isISOControl", "isWhitespace", "ordinal", "repeat", "codePointAt",
         "computeIfPresent", "getOrCreate", "toUnmodifiableList",
+        # java.net.http, java.time and Gson's JsonParser - RemoteEntitlementProvider
+        "connectTimeout", "followRedirects", "sendAsync", "thenAccept",
+        "exceptionally", "whenComplete", "ofSeconds", "parseString",
+        "unmodifiableMap", "newBuilder", "timeout",
     }
 
     # Calls on a receiver: something.name(

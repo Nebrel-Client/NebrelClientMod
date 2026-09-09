@@ -145,11 +145,11 @@ including `IdentityRenderer`, which draws through a `GlyphSink` interface rather
 than a text renderer. That subset compiles with a plain JDK, and does:
 
 ```
-Compiling 64 source files ...
-PASS  420 checks
+Compiling 65 source files ...
+PASS  442 checks
 ```
 
-The 420 assertions cover clamping and quantisation, colour maths and HSB round
+The 442 assertions cover clamping and quantisation, colour maths and HSB round
 trips, conditional visibility, module lifecycle and duplicate-id rejection,
 search, anchor geometry across resolution changes, config round trips, and
 config resilience against corrupt, truncated, wrong-typed, stale and
@@ -191,7 +191,7 @@ and `@Invoker`, and every method name called on a receiver:
 
 ```
 Loaded 6900 classes and 35817 member names
-Checking 172 source files
+Checking 173 source files
 OK  every Minecraft type and member name resolves against the mappings
 ```
 
