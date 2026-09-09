@@ -31,12 +31,19 @@ declares its own `fabric-loom` plugin version (a literal, since Gradle's
 the `mappings loom.officialMojangMappings()` dependency, `processResources`
 templating into `fabric.mod.json`, and the jar/sources-jar setup.
 
-| Target  | Loom  | Fabric Loader | Fabric API        |
-|---------|-------|----------------|-------------------|
-| 26.1    | 1.15  | 0.18.4         | 0.145.1+26.1      |
-| 26.1.1  | 1.15  | 0.18.4         | 0.145.4+26.1.1    |
-| 26.1.2  | 1.15  | 0.18.4         | 0.149.1+26.1.2    |
-| 26.2    | 1.17  | 0.19.3         | 0.159.0+26.2      |
+| Target  | Loom    | Fabric Loader | Fabric API        |
+|---------|---------|----------------|-------------------|
+| 26.1    | 1.15.5  | 0.18.4         | 0.145.1+26.1      |
+| 26.1.1  | 1.15.5  | 0.18.4         | 0.145.4+26.1.1    |
+| 26.1.2  | 1.15.5  | 0.18.4         | 0.149.1+26.1.2    |
+| 26.2    | 1.17.13 | 0.19.3         | 0.159.0+26.2      |
+
+The Loom versions are confirmed against the real
+`https://maven.fabricmc.net/net/fabricmc/fabric-loom/maven-metadata.xml`
+(there is no bare "1.15" or "1.17" artifact - only patch releases exist;
+these are the latest patch in each recommended line as of September 2026).
+Fabric Loader and Fabric API are **not yet confirmed the same way** - see
+below.
 
 26.2 needs the newer Loom/Loader because Fabric Loader 0.19 + Loom 1.17
 added enum-extension support that changed how mixins are applied at compile
@@ -59,11 +66,19 @@ notes on pointing `JAVA_HOME` or `org.gradle.java.home` at a JDK 25 install.
   environment has no network access to `maven.fabricmc.net` or Mojang's
   distribution servers, no Windows, and no display, so the `fabric-loom`
   plugin itself has never been resolved here, let alone run against a real
-  Minecraft 26.x jar. The Fabric API/Loader/Loom coordinates above are
-  believed correct as of September 2026 (found via web search, not fetched
-  directly - `meta.fabricmc.net` and `api.modrinth.com` are both blocked by
-  this sandbox's egress proxy) and should be double-checked against
-  https://modrinth.com/mod/fabric-api/versions before relying on them.
+  Minecraft 26.x jar.
+- The Loom versions in the table were wrong on the first pass (`1.15` and
+  `1.17` do not exist as artifacts - Gradle failed with "Plugin ... was not
+  found") and are now fixed against the real
+  `maven-metadata.xml` fetched from a machine with actual network access.
+  Fabric Loader and Fabric API were sourced the same unverified way (web
+  search, since `meta.fabricmc.net` and `api.modrinth.com` are both blocked
+  by this sandbox's egress proxy) and have **not** been re-checked against
+  their real `maven-metadata.xml` yet - treat them with the same suspicion
+  that turned out to be warranted for Loom, and fetch
+  `https://maven.fabricmc.net/net/fabricmc/fabric-loader/maven-metadata.xml`
+  and `https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/maven-metadata.xml`
+  from a real machine before assuming the next build error is the last one.
 - **The actual source (175 Minecraft-facing files) was written and last
   verified against Minecraft 1.21.1 via Yarn mappings** (`tools/check-mappings.py`,
   which still only checks that 1.21.1 baseline - Minecraft 26.x has no Yarn
