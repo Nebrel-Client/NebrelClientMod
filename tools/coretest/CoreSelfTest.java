@@ -29,6 +29,8 @@ import de.nebrel.client.plus.LocalEntitlementProvider;
 import de.nebrel.client.plus.NebrelEntitlement;
 import de.nebrel.client.plus.PlusSettings;
 import de.nebrel.client.plus.RemoteEntitlementProvider;
+import de.nebrel.client.render.icon.Icons;
+import de.nebrel.client.render.icon.PixelIcon;
 import de.nebrel.client.plus.badge.BadgeService;
 import de.nebrel.client.plus.badge.NebrelBadge;
 import de.nebrel.client.plus.nametag.AdditionalNametag;
@@ -140,6 +142,7 @@ public final class CoreSelfTest {
             testIdentityRendering();
             testPlusConfigRoundTrip(temp);
             testRemoteEntitlementProvider();
+            testPixelIcons();
         } finally {
             deleteTree(temp);
         }
@@ -1652,6 +1655,66 @@ public final class CoreSelfTest {
                     unreachable.entitlementsOf(bob).isEmpty());
         } finally {
             server.stop(0);
+        }
+    }
+
+    static void testPixelIcons() {
+        section("pixel icons");
+
+        check("every shipped icon is square and the same size", Icons.ALL_ICONS.values().stream()
+                .allMatch(icon -> icon.size() == Icons.ALL.size()));
+        check("every shipped icon actually draws something",
+                Icons.ALL_ICONS.values().stream().allMatch(PixelIcon::hasContent));
+        check("fifteen icons ship", Icons.ALL_ICONS.size() == 15);
+
+        // -- the constructor's own validation ---------------------------------
+        check("a non-square grid is rejected",
+                throwsIllegalArgument(() -> new PixelIcon("bad", "###", "###")));
+        check("rows of differing length are rejected",
+                throwsIllegalArgument(() -> new PixelIcon("bad", "###", "##", "###")));
+        check("a stray character is rejected",
+                throwsIllegalArgument(() -> new PixelIcon("bad", "#X#", "###", "###")));
+        check("id cannot be blank",
+                throwsIllegalArgument(() -> new PixelIcon("  ", "#")));
+
+        // -- runsInRow: the piece the draw call actually leans on -------------
+        PixelIcon single = new PixelIcon("single", "#.#", "...", ".#.");
+        check("an isolated filled cell is its own run",
+                java.util.Arrays.equals(single.runsInRow(0), new int[]{0, 1, 2, 3}));
+        check("an empty row has no runs", single.runsInRow(1).length == 0);
+        check("a middle cell is a run of one",
+                java.util.Arrays.equals(single.runsInRow(2), new int[]{1, 2}));
+
+        PixelIcon fullRow = new PixelIcon("full", "###", "###", "###");
+        check("a fully filled row is a single run",
+                java.util.Arrays.equals(fullRow.runsInRow(0), new int[]{0, 3}));
+
+        check("filled() reads the same grid runsInRow walks",
+                single.filled(0, 0) && !single.filled(0, 1) && single.filled(2, 1));
+
+        // -- the module fallback: bespoke icon or the module's own glyph ------
+        check("Nebrel HUD gets its bespoke icon", Icons.forModuleId("nebrel_hud") == Icons.HUD);
+        check("Custom Nametags gets its bespoke icon",
+                Icons.forModuleId("custom_nametags") == Icons.TAG);
+        check("Full Bright gets its bespoke icon", Icons.forModuleId("fullbright") == Icons.SUN);
+        check("Free Look gets its bespoke icon", Icons.forModuleId("freelook") == Icons.VISUAL);
+        check("Auto Text gets its bespoke icon", Icons.forModuleId("auto_text") == Icons.CHAT);
+        check("Tiers gets its bespoke icon", Icons.forModuleId("tiers") == Icons.BARS);
+        check("Hitbox gets its bespoke icon", Icons.forModuleId("hitbox") == Icons.BOUNDS);
+        check("Keystrokes gets its bespoke icon", Icons.forModuleId("keystrokes") == Icons.WASD);
+        check("a module with no bespoke icon falls back to null, not a guess",
+                Icons.forModuleId("no_fog") == null);
+        check("an unknown id is also null, not an exception",
+                Icons.forModuleId("not_a_real_module") == null);
+    }
+
+    /** True when constructing {@code action} throws {@link IllegalArgumentException}. */
+    static boolean throwsIllegalArgument(Runnable action) {
+        try {
+            action.run();
+            return false;
+        } catch (IllegalArgumentException expected) {
+            return true;
         }
     }
 

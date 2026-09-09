@@ -28,7 +28,7 @@ public final class ItemModelModule extends Module implements ClientTickHook {
 
     public ItemModelModule() {
         super("item_model", "Item Model", "Move and resize the item in your hand",
-                ModuleCategory.RENDER, "🗡");
+                ModuleCategory.RENDER, "◇");
 
         this.scale = number("scale", "Scale", "Item size", 1.0D, 0.4D, 2.0D, 0.01D);
 

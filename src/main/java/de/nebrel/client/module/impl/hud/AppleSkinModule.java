@@ -45,7 +45,7 @@ public final class AppleSkinModule extends Module implements HudRenderHook {
 
     public AppleSkinModule() {
         super("appleskin", "Food Details", "Saturation, exhaustion and what your food will restore",
-                ModuleCategory.HUD, "🍖");
+                ModuleCategory.HUD, "◔");
 
         this.saturation = bool("saturation", "Saturation Bar",
                 "Overlay the saturation level on the hunger bar", true);

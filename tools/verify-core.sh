@@ -33,6 +33,7 @@ SOURCES="${WORK}/sources.txt"
   find "${ROOT}/src/main/java/de/nebrel/client/config" -name '*.java'
   find "${ROOT}/src/main/java/de/nebrel/client/gui/theme" -name '*.java'
   find "${ROOT}/src/main/java/de/nebrel/client/render/animation" -name '*.java'
+  find "${ROOT}/src/main/java/de/nebrel/client/render/icon" -name '*.java'
   find "${ROOT}/src/main/java/de/nebrel/client/util" -name '*.java'
   echo "${ROOT}/src/main/java/de/nebrel/client/module/Module.java"
   echo "${ROOT}/src/main/java/de/nebrel/client/module/ModuleCategory.java"

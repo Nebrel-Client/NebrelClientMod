@@ -185,6 +185,31 @@ public final class RenderUtil {
         rect(context, x, y, width, 1.0F, color);
     }
 
+    /**
+     * Draws a {@link de.nebrel.client.render.icon.PixelIcon} at {@code size}
+     * square, one merged rectangle per filled run of a row rather than one per
+     * cell — fewer draws, and every seam between adjacent cells lands on the
+     * exact same rounded coordinate whichever cell it belongs to, so runs meet
+     * without a hairline gap.
+     */
+    public static void icon(DrawContext context, de.nebrel.client.render.icon.PixelIcon icon,
+                            float x, float y, float size, int color) {
+        if (size <= 0.0F || ColorUtil.alpha(color) == 0) {
+            return;
+        }
+        int cells = icon.size();
+        float cell = size / cells;
+        for (int row = 0; row < cells; row++) {
+            int[] runs = icon.runsInRow(row);
+            float rowTop = y + row * cell;
+            for (int i = 0; i < runs.length; i += 2) {
+                float runLeft = x + runs[i] * cell;
+                float runRight = x + runs[i + 1] * cell;
+                rect(context, runLeft, rowTop, runRight - runLeft, cell, color);
+            }
+        }
+    }
+
     // -- text ----------------------------------------------------------------
 
     public static TextRenderer font() {

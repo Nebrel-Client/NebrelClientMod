@@ -7,6 +7,8 @@ import de.nebrel.client.module.ModuleManager;
 import de.nebrel.client.render.RenderUtil;
 import de.nebrel.client.render.animation.Animation;
 import de.nebrel.client.render.animation.Easing;
+import de.nebrel.client.render.icon.Icons;
+import de.nebrel.client.render.icon.PixelIcon;
 import de.nebrel.client.setting.KeybindSetting;
 import de.nebrel.client.util.ColorUtil;
 import net.minecraft.client.gui.DrawContext;
@@ -104,8 +106,17 @@ public final class ModuleCardComponent extends Component {
         int iconBackground = ColorUtil.lerp(theme.surfaceElevated, theme.accentSoft, onAmount);
         RenderUtil.roundedRect(context, iconX, iconY, ICON_SIZE, ICON_SIZE, 6.0F, iconBackground);
         int iconColor = ColorUtil.lerp(theme.textSecondary, theme.accent, onAmount);
-        RenderUtil.textCentered(context, this.module.icon(), iconX + ICON_SIZE / 2.0F,
-                iconY + (ICON_SIZE - RenderUtil.lineHeight()) / 2.0F + 1.0F, iconColor);
+        PixelIcon bitmap = Icons.forModuleId(this.module.id());
+        if (bitmap != null) {
+            // Hand-drawn icons are shipped for a handful of modules; the rest
+            // keep the single-glyph icon they always had.
+            float bitmapSize = ICON_SIZE - 8.0F;
+            RenderUtil.icon(context, bitmap, iconX + (ICON_SIZE - bitmapSize) / 2.0F,
+                    iconY + (ICON_SIZE - bitmapSize) / 2.0F, bitmapSize, iconColor);
+        } else {
+            RenderUtil.textCentered(context, this.module.icon(), iconX + ICON_SIZE / 2.0F,
+                    iconY + (ICON_SIZE - RenderUtil.lineHeight()) / 2.0F + 1.0F, iconColor);
+        }
 
         float textX = iconX + ICON_SIZE + 9.0F;
         float textRight = this.x + this.width - PADDING - ToggleComponent.TRACK_WIDTH - 10.0F;

@@ -37,7 +37,7 @@ public final class CustomNametagsModule extends Module {
 
     public CustomNametagsModule() {
         super("custom_nametags", "Custom Nametags", "Restyle the name plates above entities",
-                ModuleCategory.RENDER, "🏷");
+                ModuleCategory.RENDER, "▧");
 
         this.background = bool("background", "Background", "Draw a plate behind the name", true);
         this.backgroundColor = color("backgroundColor", "Background Color", "Plate colour",

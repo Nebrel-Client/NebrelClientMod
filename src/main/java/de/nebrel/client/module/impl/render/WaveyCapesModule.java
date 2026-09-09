@@ -42,7 +42,7 @@ public final class WaveyCapesModule extends Module implements ClientTickHook {
 
     public WaveyCapesModule() {
         super("wavey_capes", "Wavey Capes", "Let capes flow instead of hanging stiff",
-                ModuleCategory.RENDER, "🏳");
+                ModuleCategory.RENDER, "▽");
 
         this.strength = number("strength", "Strength",
                 "Overall amount of extra cape movement", 1.0D, 0.0D, 3.0D, 0.05D);

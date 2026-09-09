@@ -20,6 +20,8 @@ import de.nebrel.client.module.ModuleManager;
 import de.nebrel.client.render.RenderUtil;
 import de.nebrel.client.render.animation.Animation;
 import de.nebrel.client.render.animation.Easing;
+import de.nebrel.client.render.icon.Icons;
+import de.nebrel.client.render.icon.PixelIcon;
 import de.nebrel.client.setting.Setting;
 import de.nebrel.client.util.ColorUtil;
 import de.nebrel.client.util.NebrelMath;
@@ -457,10 +459,23 @@ public final class NebrelClientScreen extends Screen {
             color = ColorUtil.fadeAlpha(color, amount);
             float textY = rowY + (NAV_ROW_HEIGHT - RenderUtil.lineHeight()) / 2.0F + 1.0F;
 
+            PixelIcon bitmap = iconFor(entry);
             if (collapsed) {
-                RenderUtil.textCentered(context, entry.icon(), this.panelX + sidebar / 2.0F, textY, color);
+                if (bitmap != null) {
+                    float iconSize = RenderUtil.lineHeight();
+                    RenderUtil.icon(context, bitmap, this.panelX + sidebar / 2.0F - iconSize / 2.0F,
+                            textY, iconSize, color);
+                } else {
+                    RenderUtil.textCentered(context, entry.icon(), this.panelX + sidebar / 2.0F,
+                            textY, color);
+                }
             } else {
-                RenderUtil.textFlat(context, entry.icon(), this.panelX + 15.0F, textY, color);
+                if (bitmap != null) {
+                    RenderUtil.icon(context, bitmap, this.panelX + 15.0F, textY,
+                            RenderUtil.lineHeight(), color);
+                } else {
+                    RenderUtil.textFlat(context, entry.icon(), this.panelX + 15.0F, textY, color);
+                }
                 RenderUtil.textFlat(context, entry.displayName(), this.panelX + 30.0F, textY, color);
 
                 int count = entry == ModuleCategory.FAVORITES
@@ -516,12 +531,34 @@ public final class NebrelClientScreen extends Screen {
                 settingsActive ? theme.accent : (settingsHovered ? theme.textPrimary : theme.textSecondary),
                 amount);
         float settingsTextY = settingsY + (NAV_ROW_HEIGHT - RenderUtil.lineHeight()) / 2.0F + 1.0F;
+        float settingsIconSize = RenderUtil.lineHeight();
         if (collapsed) {
-            RenderUtil.textCentered(context, "⚙", this.panelX + sidebar / 2.0F, settingsTextY, settingsColor);
+            RenderUtil.icon(context, Icons.SETTINGS, this.panelX + sidebar / 2.0F - settingsIconSize / 2.0F,
+                    settingsTextY, settingsIconSize, settingsColor);
         } else {
-            RenderUtil.textFlat(context, "⚙", this.panelX + 15.0F, settingsTextY, settingsColor);
+            RenderUtil.icon(context, Icons.SETTINGS, this.panelX + 15.0F, settingsTextY,
+                    settingsIconSize, settingsColor);
             RenderUtil.textFlat(context, "Settings", this.panelX + 30.0F, settingsTextY, settingsColor);
         }
+    }
+
+    /**
+     * The hand-drawn icon for a category, or {@code null} to keep the
+     * category's own single glyph. Only {@code MISC} has no bitmap — nothing
+     * uses that category yet, so it was not worth drawing one blind.
+     */
+    private static PixelIcon iconFor(ModuleCategory category) {
+        return switch (category) {
+            case ALL -> Icons.ALL;
+            case FAVORITES -> Icons.FAVORITES;
+            case HUD -> Icons.HUD;
+            case VISUAL -> Icons.VISUAL;
+            case PLAYER -> Icons.PLAYER;
+            case WORLD -> Icons.WORLD;
+            case RENDER -> Icons.RENDER;
+            case UTILITY -> Icons.UTILITY;
+            case MISC -> null;
+        };
     }
 
     private float settingsRowY() {
