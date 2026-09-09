@@ -4,6 +4,16 @@ All notable changes to Nebrel Client are recorded here. Versions follow
 `major.minor.patch`; the mod version is templated from `gradle.properties`
 (`mod_version`) into `fabric.mod.json` at build time.
 
+## 26.2
+
+- Nebrel+ page and nametag designer: live preview (World / Tab List / Chat
+  tabs), badge style/colour controls, seven nametag effects, an additional
+  nametag line, and a sidebar entry.
+- Config, cache invalidation and the (currently unimplemented) server bridge
+  wired into the Nebrel+ facade.
+- Core self-test extended to 420 assertions; the whole Nebrel+ engine compiles
+  and is tested headlessly (`tools/verify-core.sh`).
+
 ## 26.1.2
 
 - Fixed the additional nametag line drifting sideways whenever its Scale
