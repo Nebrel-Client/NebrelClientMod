@@ -19,22 +19,27 @@ public final class Icons {
 
     // -- navigation ------------------------------------------------------
 
+    /**
+     * Four outlined tiles in a 2x2 grid: "all your modules", drawn the same
+     * monoline way as every other navigation icon rather than the two filled
+     * blobs this used to be.
+     */
     public static final PixelIcon ALL = new PixelIcon("all",
             "................",
-            ".#####...#####..",
-            ".######..######.",
-            ".######..######.",
-            ".######..######.",
-            ".#####...#####..",
-            "..###.....###...",
+            "................",
+            "..#####..#####..",
+            "..#...#..#...#..",
+            "..#...#..#...#..",
+            "..#...#..#...#..",
+            "..#####..#####..",
             "................",
             "................",
-            ".#####...#####..",
-            ".######..######.",
-            ".######..######.",
-            ".######..######.",
-            ".#####...#####..",
-            "..###.....###...",
+            "..#####..#####..",
+            "..#...#..#...#..",
+            "..#...#..#...#..",
+            "..#...#..#...#..",
+            "..#####..#####..",
+            "................",
             "................");
 
     public static final PixelIcon FAVORITES = new PixelIcon("favorites",
@@ -163,6 +168,89 @@ public final class Icons {
             "................",
             "................");
 
+    /**
+     * The Nebrel+ brand mark: a slanted monoline "N", not a NoRisk-style bolt
+     * and not the plain unicode star the sidebar used to draw for this row.
+     */
+    public static final PixelIcon NEBREL = new PixelIcon("nebrel",
+            "................",
+            "................",
+            "..####......##..",
+            "..####......##..",
+            "..##.##.....##..",
+            "..##.##.....##..",
+            "..##..##....##..",
+            "..##...##...##..",
+            "..##...##...##..",
+            "..##....##..##..",
+            "..##.....##.##..",
+            "..##.....##.##..",
+            "..##......####..",
+            "..##......####..",
+            "................",
+            "................");
+
+    /** A hollow reticle with a small centre dot, not a detailed target. */
+    public static final PixelIcon CROSSHAIR = new PixelIcon("crosshair",
+            "................",
+            "................",
+            ".......##.......",
+            ".......##.......",
+            ".......##.......",
+            ".......##.......",
+            "................",
+            "..####.##.####..",
+            "..####.##.####..",
+            "................",
+            ".......##.......",
+            ".......##.......",
+            ".......##.......",
+            ".......##.......",
+            "................",
+            "................");
+
+    /** A left-pointing chevron, used everywhere a view has a "back" action. */
+    public static final PixelIcon BACK = new PixelIcon("back",
+            "................",
+            "................",
+            "................",
+            "..........##....",
+            "........##......",
+            ".......##.......",
+            "......##........",
+            ".....##.........",
+            ".....##.........",
+            "......##........",
+            ".......##.......",
+            "........##......",
+            "..........##....",
+            "................",
+            "................",
+            "................");
+
+    /**
+     * Two heads over a shared shoulder bar. Prepared for a future friends list;
+     * nothing in the menu links to it yet, so it is registered but not wired
+     * into any real navigation row (there is no friends feature to point at).
+     */
+    public static final PixelIcon FRIENDS = new PixelIcon("friends",
+            "................",
+            "................",
+            "....##....##....",
+            "...#..#..#..#...",
+            "...#..#..#..#...",
+            "....##....##....",
+            "................",
+            "................",
+            "..############..",
+            "..#..........#..",
+            "..#..........#..",
+            "..#..........#..",
+            "..#..........#..",
+            "..############..",
+            "................",
+            "................");
+
     public static final PixelIcon SETTINGS = new PixelIcon("settings",
             ".......##.......",
             "......####......",
@@ -201,18 +289,19 @@ public final class Icons {
             "......##........",
             "................");
 
+    /** A hollow ring rather than a filled disc, to match the outline icons around it. */
     public static final PixelIcon SUN = new PixelIcon("sun",
             ".......#........",
             ".......#........",
             "..#....#.....#..",
             "...#........#...",
             "....#..##..#....",
-            ".....######.....",
-            ".....######.....",
-            "....########....",
-            "###.########.###",
-            ".....######.....",
-            ".....######.....",
+            ".....#....#.....",
+            ".....#....#.....",
+            "....#......#....",
+            "###.#......#.###",
+            ".....#....#.....",
+            ".....#....#.....",
             "....#..##..#....",
             "...#........#...",
             "..#.....#....#..",
@@ -273,6 +362,139 @@ public final class Icons {
             "...#########....",
             "................");
 
+    /** Three horizontal haze layers crossed out, for "No Fog". */
+    public static final PixelIcon NO_FOG = new PixelIcon("no_fog",
+            "................",
+            "................",
+            "..##............",
+            "...##...........",
+            "....##..........",
+            "...##########...",
+            "......##........",
+            ".......##.......",
+            "..############..",
+            ".........##.....",
+            "..........##....",
+            "...##########...",
+            "............##..",
+            ".............##.",
+            "................",
+            "................");
+
+    /** A small filled heart with a readout bar beneath it. */
+    public static final PixelIcon HEART_BAR = new PixelIcon("heart_bar",
+            "................",
+            "................",
+            "................",
+            "...####..####...",
+            "..#####..#####..",
+            "..############..",
+            "..############..",
+            "...##########...",
+            "....########....",
+            ".....######.....",
+            "......####......",
+            ".......##.......",
+            "................",
+            "....########....",
+            "................",
+            "................");
+
+    /** The same heart with a small impact spark instead of a bar. */
+    public static final PixelIcon HEART_FLASH = new PixelIcon("heart_flash",
+            ".............#..",
+            "............###.",
+            ".............#..",
+            "...####..####...",
+            "..#####..#####..",
+            "..############..",
+            "..############..",
+            "...##########...",
+            "....########....",
+            ".....######.....",
+            "......####......",
+            ".......##.......",
+            "................",
+            "................",
+            "................",
+            "................");
+
+    /** A clipboard with a tab and three list lines, for Quests. */
+    public static final PixelIcon CLIPBOARD = new PixelIcon("clipboard",
+            "................",
+            "................",
+            ".....#####......",
+            "...##########...",
+            "...#........#...",
+            "...#.#####..#...",
+            "...#........#...",
+            "...#.#####..#...",
+            "...#........#...",
+            "...#.#####..#...",
+            "...#........#...",
+            "...#........#...",
+            "...##########...",
+            "................",
+            "................",
+            "................");
+
+    /** A right-pointing chevron; mirrors {@link #BACK}. */
+    public static final PixelIcon FORWARD = new PixelIcon("forward",
+            "................",
+            "................",
+            "................",
+            "....##..........",
+            "......##........",
+            ".......##.......",
+            "........##......",
+            ".........##.....",
+            ".........##.....",
+            "........##......",
+            ".......##.......",
+            "......##........",
+            "....##..........",
+            "................",
+            "................",
+            "................");
+
+    /** Three small rings cascading diagonally, for a soft/blurred surface. */
+    public static final PixelIcon BLUR_RINGS = new PixelIcon("blur_rings",
+            "................",
+            "................",
+            "...##...........",
+            "..#..#..........",
+            "..#..#..........",
+            "...##.##........",
+            ".....#..#.......",
+            ".....#..#.......",
+            "......##.##.....",
+            "........#..#....",
+            "........#..#....",
+            ".........##.....",
+            "................",
+            "................",
+            "................",
+            "................");
+
+    /** A diagonal pencil stroke with a point, for edit actions. */
+    public static final PixelIcon EDIT = new PixelIcon("edit",
+            "................",
+            "................",
+            "............##..",
+            "...........##...",
+            "..........##....",
+            ".........##.....",
+            "........##......",
+            ".......##.......",
+            "......##........",
+            ".....##.........",
+            "....##..........",
+            "...##...........",
+            "..##............",
+            "..#.............",
+            "................",
+            "................");
+
     public static final PixelIcon WASD = new PixelIcon("wasd",
             "................",
             "......####......",
@@ -301,6 +523,17 @@ public final class Icons {
             Map.entry(WORLD.id(), WORLD),
             Map.entry(RENDER.id(), RENDER),
             Map.entry(UTILITY.id(), UTILITY),
+            Map.entry(NEBREL.id(), NEBREL),
+            Map.entry(CROSSHAIR.id(), CROSSHAIR),
+            Map.entry(BACK.id(), BACK),
+            Map.entry(FORWARD.id(), FORWARD),
+            Map.entry(FRIENDS.id(), FRIENDS),
+            Map.entry(NO_FOG.id(), NO_FOG),
+            Map.entry(HEART_BAR.id(), HEART_BAR),
+            Map.entry(HEART_FLASH.id(), HEART_FLASH),
+            Map.entry(CLIPBOARD.id(), CLIPBOARD),
+            Map.entry(BLUR_RINGS.id(), BLUR_RINGS),
+            Map.entry(EDIT.id(), EDIT),
             Map.entry(SETTINGS.id(), SETTINGS),
             Map.entry(TAG.id(), TAG),
             Map.entry(SUN.id(), SUN),
@@ -327,6 +560,13 @@ public final class Icons {
             case "tiers" -> BARS;
             case "hitbox" -> BOUNDS;
             case "keystrokes" -> WASD;
+            case "crosshair" -> CROSSHAIR;
+            case "no_fog" -> NO_FOG;
+            case "health_indicators" -> HEART_BAR;
+            case "damage_tint" -> HEART_FLASH;
+            case "quests" -> CLIPBOARD;
+            case "toggle_sprint" -> FORWARD;
+            case "blur" -> BLUR_RINGS;
             default -> null;
         };
     }

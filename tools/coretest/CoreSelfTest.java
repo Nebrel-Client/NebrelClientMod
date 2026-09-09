@@ -1698,7 +1698,7 @@ public final class CoreSelfTest {
                 .allMatch(icon -> icon.size() == Icons.ALL.size()));
         check("every shipped icon actually draws something",
                 Icons.ALL_ICONS.values().stream().allMatch(PixelIcon::hasContent));
-        check("fifteen icons ship", Icons.ALL_ICONS.size() == 15);
+        check("twenty-six icons ship", Icons.ALL_ICONS.size() == 26);
 
         // -- the constructor's own validation ---------------------------------
         check("a non-square grid is rejected",
@@ -1735,8 +1735,18 @@ public final class CoreSelfTest {
         check("Tiers gets its bespoke icon", Icons.forModuleId("tiers") == Icons.BARS);
         check("Hitbox gets its bespoke icon", Icons.forModuleId("hitbox") == Icons.BOUNDS);
         check("Keystrokes gets its bespoke icon", Icons.forModuleId("keystrokes") == Icons.WASD);
+        check("Crosshair gets its bespoke icon", Icons.forModuleId("crosshair") == Icons.CROSSHAIR);
+        check("No Fog gets its bespoke icon", Icons.forModuleId("no_fog") == Icons.NO_FOG);
+        check("Health Indicators gets its bespoke icon",
+                Icons.forModuleId("health_indicators") == Icons.HEART_BAR);
+        check("Damage Tint gets its bespoke icon",
+                Icons.forModuleId("damage_tint") == Icons.HEART_FLASH);
+        check("Quests gets its bespoke icon", Icons.forModuleId("quests") == Icons.CLIPBOARD);
+        check("Toggle Sprint gets its bespoke icon",
+                Icons.forModuleId("toggle_sprint") == Icons.FORWARD);
+        check("Screen Dim gets its bespoke icon", Icons.forModuleId("blur") == Icons.BLUR_RINGS);
         check("a module with no bespoke icon falls back to null, not a guess",
-                Icons.forModuleId("no_fog") == null);
+                Icons.forModuleId("appleskin") == null);
         check("an unknown id is also null, not an exception",
                 Icons.forModuleId("not_a_real_module") == null);
     }

@@ -133,12 +133,12 @@ public final class NebrelClientScreen extends Screen {
         this.themeButton = new IconButtonComponent(this.ui, "◐",
                 () -> this.nebrel.themes().cycleTheme())
                 .tooltip("Cycle Dark, Light and Glass themes");
-        this.hudEditorButton = new IconButtonComponent(this.ui, "▤",
+        this.hudEditorButton = new IconButtonComponent(this.ui, Icons.HUD,
                 () -> this.client.setScreen(new HudEditorScreen(this)))
                 .tooltip("Open the HUD editor");
         this.resetButton = new IconButtonComponent(this.ui, "↺", this::confirmReset)
                 .tooltip("Reset these settings to their defaults");
-        this.backButton = new IconButtonComponent(this.ui, "‹", this::goBack)
+        this.backButton = new IconButtonComponent(this.ui, Icons.BACK, this::goBack)
                 .tooltip("Back to the module list");
         this.headerToggle = new ToggleComponent(this.ui,
                 () -> this.openModule != null && this.openModule.enabled(),
@@ -519,10 +519,12 @@ public final class NebrelClientScreen extends Screen {
                 plusActive || plusHovered ? theme.accent : ColorUtil.withAlpha(theme.accent, 200),
                 amount);
         float plusTextY = plusY + (NAV_ROW_HEIGHT - RenderUtil.lineHeight()) / 2.0F + 1.0F;
+        float plusIconSize = RenderUtil.lineHeight();
         if (collapsed) {
-            RenderUtil.textCentered(context, "✦", this.panelX + sidebar / 2.0F, plusTextY, plusColor);
+            RenderUtil.icon(context, Icons.NEBREL, this.panelX + sidebar / 2.0F - plusIconSize / 2.0F,
+                    plusTextY, plusIconSize, plusColor);
         } else {
-            RenderUtil.textFlat(context, "✦", this.panelX + 15.0F, plusTextY, plusColor);
+            RenderUtil.icon(context, Icons.NEBREL, this.panelX + 15.0F, plusTextY, plusIconSize, plusColor);
             RenderUtil.textFlat(context, "Nebrel+", this.panelX + 30.0F, plusTextY, plusColor);
             if (this.nebrel.plus().localIsPlus()) {
                 RenderUtil.textScaled(context, "ON", this.panelX + sidebar - 20.0F,
@@ -731,9 +733,20 @@ public final class NebrelClientScreen extends Screen {
         this.resetButton.render(context, mouseX, mouseY, delta);
 
         int budget = (int) Math.max(30.0F, rightEdge - textX - ToggleComponent.TRACK_WIDTH - 34.0F);
-        RenderUtil.textFlat(context,
-                this.openModule.icon() + "  " + RenderUtil.truncate(this.openModule.name(), budget),
-                textX, headerY + 1.0F, ColorUtil.fadeAlpha(theme.textPrimary, amount));
+        int titleColor = ColorUtil.fadeAlpha(theme.textPrimary, amount);
+        PixelIcon moduleIcon = Icons.forModuleId(this.openModule.id());
+        float nameX = textX;
+        if (moduleIcon != null) {
+            float iconSize = RenderUtil.lineHeight();
+            RenderUtil.icon(context, moduleIcon, textX, headerY + 1.0F, iconSize, titleColor);
+            nameX = textX + iconSize + 6.0F;
+            RenderUtil.textFlat(context,
+                    RenderUtil.truncate(this.openModule.name(), budget), nameX, headerY + 1.0F, titleColor);
+        } else {
+            RenderUtil.textFlat(context,
+                    this.openModule.icon() + "  " + RenderUtil.truncate(this.openModule.name(), budget),
+                    textX, headerY + 1.0F, titleColor);
+        }
         if (!this.openModule.description().isEmpty()) {
             RenderUtil.textScaled(context,
                     RenderUtil.truncate(this.openModule.description(), (int) (budget / 0.85F)),
@@ -759,7 +772,9 @@ public final class NebrelClientScreen extends Screen {
         this.backButton.setBounds(left + CONTENT_PADDING - 4.0F, headerY, 20.0F, 20.0F);
         this.backButton.render(context, mouseX, mouseY, delta);
 
-        RenderUtil.textFlat(context, "⚙  Client Settings", left + CONTENT_PADDING + 22.0F,
+        RenderUtil.icon(context, Icons.SETTINGS, left + CONTENT_PADDING + 22.0F, headerY + 1.0F,
+                RenderUtil.lineHeight(), ColorUtil.fadeAlpha(theme.textPrimary, amount));
+        RenderUtil.textFlat(context, "Client Settings", left + CONTENT_PADDING + 22.0F + RenderUtil.lineHeight() + 5.0F,
                 headerY + 1.0F, ColorUtil.fadeAlpha(theme.textPrimary, amount));
         RenderUtil.textScaled(context, "Menu, theme and interface preferences",
                 left + CONTENT_PADDING + 22.0F, headerY + RenderUtil.lineHeight() + 2.0F, 0.85F,
@@ -787,7 +802,7 @@ public final class NebrelClientScreen extends Screen {
                                 float amount) {
         float left = contentLeft();
         float width = contentWidth();
-        renderSubHeader(context, "Nebrel+", "Membership, badge and nametag styling",
+        renderSubHeader(context, Icons.NEBREL, "Nebrel+", "Membership, badge and nametag styling",
                 false, amount, mouseX, mouseY, delta);
 
         this.plusPage.setBounds(left + CONTENT_PADDING, this.panelY + HEADER_HEIGHT,
@@ -799,7 +814,7 @@ public final class NebrelClientScreen extends Screen {
                                 float amount) {
         float left = contentLeft();
         float width = contentWidth();
-        renderSubHeader(context, "✎  Nametag Designer",
+        renderSubHeader(context, Icons.EDIT, "Nametag Designer",
                 "Changes apply live, above your head and in the preview",
                 true, amount, mouseX, mouseY, delta);
 
@@ -809,12 +824,12 @@ public final class NebrelClientScreen extends Screen {
     }
 
     /**
-     * The back arrow, a title, a subtitle and the divider.
+     * The back arrow, an icon, a title, a subtitle and the divider.
      *
      * <p>Shared by the views that are entered from somewhere else, so they line
      * up with the module settings header rather than each inventing its own.</p>
      */
-    private void renderSubHeader(DrawContext context, String title, String subtitle,
+    private void renderSubHeader(DrawContext context, PixelIcon icon, String title, String subtitle,
                                  boolean withReset, float amount,
                                  int mouseX, int mouseY, float delta) {
         Theme theme = this.ui.theme();
@@ -832,8 +847,10 @@ public final class NebrelClientScreen extends Screen {
             this.resetButton.render(context, mouseX, mouseY, delta);
         }
 
-        RenderUtil.textFlat(context, title, textX, headerY + 1.0F,
-                ColorUtil.fadeAlpha(theme.textPrimary, amount));
+        int titleColor = ColorUtil.fadeAlpha(theme.textPrimary, amount);
+        float iconSize = RenderUtil.lineHeight();
+        RenderUtil.icon(context, icon, textX, headerY + 1.0F, iconSize, titleColor);
+        RenderUtil.textFlat(context, title, textX + iconSize + 6.0F, headerY + 1.0F, titleColor);
         RenderUtil.textScaled(context, subtitle, textX, headerY + RenderUtil.lineHeight() + 2.0F,
                 0.85F, ColorUtil.fadeAlpha(theme.textSecondary, amount), false);
 

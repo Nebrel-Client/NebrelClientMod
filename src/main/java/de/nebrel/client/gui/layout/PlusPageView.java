@@ -8,6 +8,7 @@ import de.nebrel.client.gui.theme.Theme;
 import de.nebrel.client.plus.NebrelEntitlement;
 import de.nebrel.client.plus.NebrelPlus;
 import de.nebrel.client.render.RenderUtil;
+import de.nebrel.client.render.icon.Icons;
 import de.nebrel.client.util.ColorUtil;
 import net.minecraft.client.gui.DrawContext;
 
@@ -47,7 +48,7 @@ public final class PlusPageView {
         this.plus = plus;
         this.scroll = new ScrollContainer(ui);
         this.preview = new NametagPreviewComponent(ui, plus);
-        this.designerButton = new IconButtonComponent(ui, "✎", openDesigner)
+        this.designerButton = new IconButtonComponent(ui, Icons.EDIT, openDesigner)
                 .label("Open Nametag Designer")
                 .style(IconButtonComponent.Style.ACCENT)
                 .tooltip("Design your badge, nametag colours and effects");
