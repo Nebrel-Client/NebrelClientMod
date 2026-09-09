@@ -13,6 +13,8 @@ import de.nebrel.client.keybind.KeybindManager;
 import de.nebrel.client.module.ModuleManager;
 import de.nebrel.client.module.Modules;
 import de.nebrel.client.notification.NotificationManager;
+import de.nebrel.client.plus.NebrelPlus;
+import de.nebrel.client.plus.PlusSettings;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.nio.file.Path;
@@ -39,11 +41,18 @@ public final class NebrelClient {
     private final ModuleDispatcher dispatcher;
     private final ConfigManager config;
     private final UiContext ui;
+    private final PlusSettings plusSettings;
+    private final NebrelPlus plus;
 
     private NebrelClient(Path configRoot) {
         this.settings = new ClientSettings();
         this.themes = new ThemeManager();
         this.ui = new UiContext(this.themes, this.settings);
+
+        // Nebrel+ is built before the modules, because the Custom Nametags
+        // module installs itself into the nametag coordinator on construction.
+        this.plusSettings = new PlusSettings();
+        this.plus = new NebrelPlus(this.plusSettings);
 
         this.modules = new ModuleManager();
         this.hud = new HudManager();
@@ -61,7 +70,8 @@ public final class NebrelClient {
                 .register(new KeybindConfigSection(this.modules))
                 .register(new ThemeConfigSection(this.themes))
                 .register(this.hud)
-                .register(this.settings);
+                .register(this.settings)
+                .register(this.plusSettings);
 
         // Any module state change means the config is stale and the dispatcher's
         // hook lists need rebuilding.
@@ -114,6 +124,11 @@ public final class NebrelClient {
         // every registry is populated.
         this.modules.activateLoadedModules();
         this.dispatcher.rebuild();
+
+        // Nebrel+ is built before the config manager, so it is handed the dirty
+        // hook rather than reaching for it — and only now, because restoring a
+        // stored value is not a user edit and must not mark the file stale.
+        this.plus.setChangeListener(this.config::markDirty);
     }
 
     // -- accessors -----------------------------------------------------------
@@ -156,6 +171,14 @@ public final class NebrelClient {
 
     public UiContext ui() {
         return this.ui;
+    }
+
+    public NebrelPlus plus() {
+        return this.plus;
+    }
+
+    public PlusSettings plusSettings() {
+        return this.plusSettings;
     }
 
     /** The accent colour to draw HUD and in-world elements with. */

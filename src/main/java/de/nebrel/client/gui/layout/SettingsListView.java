@@ -39,6 +39,9 @@ public final class SettingsListView {
     private final List<Component> entries = new ArrayList<>();
     private final List<SettingRow> rows = new ArrayList<>();
 
+    /** Sections to show first, in this order; empty means use the shared ranking. */
+    private List<String> sectionOrder = List.of();
+
     private float x;
     private float y;
     private float width;
@@ -65,7 +68,7 @@ public final class SettingsListView {
         }
 
         List<String> sections = new ArrayList<>(grouped.keySet());
-        sections.sort(Comparator.comparingInt(SettingSection::rank).thenComparing(name -> name));
+        sections.sort(Comparator.comparingInt(this::sectionRank).thenComparing(name -> name));
 
         for (String section : sections) {
             List<Setting<?>> members = grouped.get(section);
@@ -78,6 +81,28 @@ public final class SettingsListView {
             }
         }
         this.scroll.reset();
+    }
+
+    /**
+     * Overrides the section ordering for this list.
+     *
+     * <p>The shared {@link SettingSection#ORDER} suits a module's settings, but
+     * a view with its own vocabulary — the nametag designer's Badge, Effects and
+     * Additional Nametag groups — needs to name its own order. Sections not
+     * listed keep sorting after the listed ones, alphabetically. Call before
+     * {@link #setSettings}.</p>
+     */
+    public void setSectionOrder(List<String> order) {
+        this.sectionOrder = List.copyOf(order);
+    }
+
+    /** Position of a section: the explicit order first, else the shared ranking. */
+    private int sectionRank(String section) {
+        if (this.sectionOrder.isEmpty()) {
+            return SettingSection.rank(section);
+        }
+        int index = this.sectionOrder.indexOf(section);
+        return index < 0 ? this.sectionOrder.size() : index;
     }
 
     public void setBounds(float x, float y, float width, float height) {

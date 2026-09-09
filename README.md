@@ -1,8 +1,9 @@
 # Nebrel Client
 
 A modular Minecraft client for Fabric. Module system, in-game menu, themeable
-interface, drag-and-drop HUD editor, and 32 fair-play visual and
-quality-of-life modules.
+interface, drag-and-drop HUD editor, 32 fair-play visual and quality-of-life
+modules, and Nebrel+ — a membership tier with a badge and an animated nametag
+designer.
 
 - **Minecraft** 1.21.1 · **Fabric Loader** 0.16.14 · **Fabric API** 0.115.6 ·
   **Java** 21 · **Mappings** Yarn
@@ -34,29 +35,31 @@ compiler. Both currently pass:
 
 ```
 $ ./tools/verify-core.sh
-Compiling 32 source files ...
-PASS  278 checks
+Compiling 64 source files ...
+PASS  420 checks
 
 $ ./tools/check-mappings.py
-Loaded 6896 classes and 35816 member names
-Checking 132 source files
+Loaded 6900 classes and 35817 member names
+Checking 172 source files
 OK  every Minecraft type and member name resolves against the mappings
 ```
 
 - **`tools/verify-core.sh`** really compiles the Minecraft-independent half —
-  settings, config, module registry, theme, animation, HUD geometry — with a
-  plain JDK and runs 278 assertions against it. No Minecraft, no Loom.
+  settings, config, module registry, theme, animation, HUD geometry, and the
+  whole Nebrel+ engine — with a plain JDK and runs 420 assertions against it.
+  No Minecraft, no Loom.
 - **`tools/check-mappings.py`** checks every Minecraft type and member name in
-  all 132 source files against the official Yarn 1.21.1 mappings, including
+  all 172 source files against the official Yarn 1.21.1 mappings, including
   mixin targets and injector method names.
 
-Between them they caught four real bugs while this was being written; see
+Between them they caught six real bugs while this was being written; see
 [`docs/REFERENCE_MAP.md` §4](docs/REFERENCE_MAP.md) for what they were.
 
 **What this does not prove:** the mapping check is name-level. It cannot verify
 argument types, generic bounds, or that a mixin injection point resolves at load
-time. The ten mixins are the highest-risk part of the codebase and the first
-thing to check on a real build.
+time. The twelve mixins are the highest-risk part of the codebase and the first
+thing to check on a real build. The menu and HUD drawing code imports Minecraft,
+so it is covered by the name check but has never been compiled either.
 
 ---
 
@@ -169,6 +172,94 @@ widget 10 px from a corner stays 10 px from it at any resolution.
 
 ---
 
+## Nebrel+
+
+A membership tier. Today it delivers the **N badge** in front of your name, a
+**nametag designer** with seven animated effects, and an optional **second
+nametag line**. Open it from the sidebar; the designer sits behind the button on
+that page.
+
+**There is no shop, no checkout and no payment of any kind in this repository.**
+Membership currently comes from a local development grant so the features can be
+built and looked at. That is a placeholder, and the code says so out loud rather
+than pretending otherwise.
+
+### Entitlements, not a boolean
+
+Nothing asks "is this player premium". Features ask for the capability they
+actually need — `NEBREL_PLUS_BADGE`, `NAMETAG_DESIGNER` — through
+`EntitlementService`, which merges answers from a list of providers and caches
+them for five seconds.
+
+Today the only provider is `LocalEntitlementProvider`, which grants the
+implemented entitlements to the local player when Development Mode is on, and
+reports `authoritative() == false`. **It is deliberately not a security
+boundary**, and it would be dishonest to imply otherwise: anyone can edit
+`plus.json`. Real membership has to come from a `RemoteEntitlementProvider`
+answering from a Nebrel backend, and until one exists the Nebrel+ page says
+"Granted locally by Development Mode. Not a real membership." rather than
+"ACTIVE" with no qualification.
+
+### One renderer, four surfaces
+
+The badge and the styled name are composed once, in `IdentityRenderer`, against
+a `GlyphSink` interface. The world nametag supplies a sink that draws through a
+vertex consumer; the tab list, chat and the designer preview supply one that
+draws in screen space. Writing that twice would guarantee the preview eventually
+stopped matching the nametag, so **the preview is not a mock-up — it is the same
+renderer pointed at the menu.**
+
+The world label has exactly one owner. The Custom Nametags module describes the
+frame (`WorldNametagStyle`), Nebrel+ supplies the content, and
+`NametagCoordinator` draws the single result. There is no second nametag engine.
+
+### What the tab list and chat cannot do
+
+The game renders those from a `Text` component, and a component can carry a
+colour but not a position. **Rainbow, chromatic and blinking work there;
+shaking, waving, skewing and growing do not.** They work above the player, where
+this client owns the drawing. The designer's Tab and Chat preview tabs go
+through the same code and name the effects that will not appear, rather than
+showing motion those surfaces cannot deliver.
+
+Chat is a further judgement call worth stating: a chat line is an arbitrary
+server-formatted component with no marked sender, so Nebrel matches the local
+player's name against the line's text. That is a heuristic. It errs towards
+doing nothing and can be switched off.
+
+### Effects
+
+Rainbow, Chromatic, Blinking (colour and alpha) · Shaking, Waving (position) ·
+Skewing, Growing (transform). The pipeline runs them in stage order — colour,
+alpha, position, transform — and asserts that ordering at construction, because
+a position effect running before a colour effect would read a colour that is
+about to change.
+
+Every effect is a pure function of `(time, character index, character count,
+character, base colour)`. Nothing calls `Math.random()`, which is what lets the
+preview and the nametag agree, and what the self-test's determinism assertions
+check.
+
+### Coming soon, and labelled as such
+
+Founder, staff, partner and creator badges, monthly rewards, shop discounts and
+raised social limits exist as entitlement constants with `implemented() ==
+false`. The Nebrel+ page generates its benefit list from that enum, so an
+unimplemented benefit is automatically filed under "Coming Soon" — the page
+cannot advertise something the client does not do.
+
+`ServerIdentityBridge` is an interface with no implementation, and no server is
+modified. Badges are visible to other Nebrel clients; making them visible to
+vanilla clients needs server-side integration that does not exist yet.
+
+### Stored data
+
+`config/nebrelclient/plus.json` holds presentation choices only — badge style,
+colours, effect tuning, the extra line. **No tokens, no passwords, no payment
+information**, and the self-test asserts that none appear in the written file.
+
+---
+
 ## Fair play
 
 Not a cheat client, and the boundary is enforced in code:
@@ -181,6 +272,10 @@ Not a cheat client, and the boundary is enforced in code:
 - **Time** and **Weather Changer** change the client's own copy of world state.
 - **Overflow Particles** can only lower the particle ceiling, never raise it.
 - **CPS** counts clicks the player made.
+
+- **Nebrel+** is purely visual and social. A badge and a coloured name confer no
+  combat advantage, reveal no hidden information, send no packets and bypass
+  nothing.
 
 Not implemented and not planned: kill aura, reach, aim assist, velocity, fly,
 speed, packet exploits, anti-cheat bypass, X-ray, wall ESP, auto clicker, combat

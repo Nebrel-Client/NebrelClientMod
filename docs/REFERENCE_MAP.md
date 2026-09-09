@@ -72,6 +72,11 @@ appears in this repository. Nebrel has its own name, its own palette, and its
 entire interface is drawn in code from rectangles and the vanilla font, so there
 are no image assets to have copied in the first place.
 
+The Nebrel+ badge is the letter **N**, for Nebrel, drawn in the vanilla font on a
+rounded plate the client fills itself. It is not an image, not a glyph from
+another client's font, and not a redraw of anyone else's mark. It sits before the
+name, defaults to the purple accent, and follows the active theme.
+
 ---
 
 ## 2. The mods whose names appear in the module list
@@ -135,21 +140,34 @@ Two verification passes were built to cover as much as possible without it.
 ### `tools/verify-core.sh` — real compilation, real assertions
 
 The settings, config, module-registry, theme, animation and HUD-geometry layers
-carry no Minecraft import, by design. That subset compiles with a plain JDK, and
-does:
+carry no Minecraft import, by design — and so does the whole Nebrel+ engine,
+including `IdentityRenderer`, which draws through a `GlyphSink` interface rather
+than a text renderer. That subset compiles with a plain JDK, and does:
 
 ```
-Compiling 32 source files ...
-PASS  278 checks
+Compiling 64 source files ...
+PASS  420 checks
 ```
 
-The 278 assertions cover clamping and quantisation, colour maths and HSB round
+The 420 assertions cover clamping and quantisation, colour maths and HSB round
 trips, conditional visibility, module lifecycle and duplicate-id rejection,
 search, anchor geometry across resolution changes, config round trips, and
 config resilience against corrupt, truncated, wrong-typed, stale and
 version-skewed files.
 
-Two real bugs were caught here and fixed:
+Nebrel+ is covered by roughly 140 of them, and they are the answer to "is this
+actually implemented or just a flag". A `RecordingSink` captures every draw, so
+the badge assertions check what was *painted* — that the plate style emits a
+plate and an `N`, that the bracket style emits `[N]`, that a disabled badge
+draws nothing and reserves no width, that a name under an effect is drawn as six
+separate glyphs that still spell the name, and that scaling a glyph does not
+move its neighbours. A boolean `hasBadge` would pass none of them. The rest
+cover entitlement merging and caching, provider isolation on failure, the badge
+colour modes, `AdditionalNametag.sanitise`, effect stage ordering, the fact that
+each effect actually changes its own output, determinism across repeated
+evaluation, and that `plus.json` contains no token, password or payment field.
+
+Three real bugs were caught here and fixed:
 
 - `SmoothScroll` was not converging, because the test drove it in a tight loop
   while the class is deliberately wall-clock driven. The test was wrong; the
@@ -158,6 +176,11 @@ Two real bugs were caught here and fixed:
   but the margin test did not: a widget 10 px from the bottom-right corner became
   6.7 px from it at a lower resolution. Anchors now store a pixel offset from the
   anchor point, which is what makes an anchor worth having.
+- Adding the Nebrel+ engine to this pass immediately failed to compile:
+  `IdentityRenderer` was reaching for the Minecraft-facing `HudGlyphSink` through
+  an `instanceof` to draw the outline badge style. `plateOutline` moved onto the
+  `GlyphSink` interface with a no-op default, which is both the honest answer for
+  a surface with no geometry and what lets the renderer stay Minecraft-free.
 
 ### `tools/check-mappings.py` — every Minecraft symbol, checked
 
@@ -167,18 +190,24 @@ compiler. The script checks every `import net.minecraft...`, every
 and `@Invoker`, and every method name called on a receiver:
 
 ```
-Loaded 6896 classes and 35816 member names
-Checking 132 source files
+Loaded 6900 classes and 35817 member names
+Checking 172 source files
 OK  every Minecraft type and member name resolves against the mappings
 ```
 
-It caught two real errors:
+It caught three real errors:
 
 - `DrawContext.drawStackOverlay` does not exist in 1.21.1. The correct name is
   `drawItemInSlot`.
 - `ClientWorld.getPlayers()` is declared on `World` with a wildcard element
   type, so iterating it as `AbstractClientPlayerEntity` would not compile. Three
   modules now use `getEntities()` with an `instanceof` pattern.
+- The checker itself was wrong once Nebrel+ introduced records: it only learned
+  Nebrel's own method names from declarations, and a record's accessors are
+  implicit, so `backgroundColor`, `opacity` and friends were reported as invented
+  Minecraft API. It now reads record components out of the header too. Worth
+  recording as a caught error rather than a silent fix — a checker that
+  false-flags is a checker people stop reading.
 
 **What this does not prove.** It is a name-level check. It cannot verify argument
 types, generic bounds, or that a mixin injection point resolves at load time.

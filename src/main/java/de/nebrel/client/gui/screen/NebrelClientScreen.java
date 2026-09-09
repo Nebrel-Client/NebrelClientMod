@@ -10,6 +10,8 @@ import de.nebrel.client.gui.component.ScrollContainer;
 import de.nebrel.client.gui.component.SearchComponent;
 import de.nebrel.client.gui.component.ToggleComponent;
 import de.nebrel.client.gui.component.TooltipComponent;
+import de.nebrel.client.gui.layout.NametagDesignerView;
+import de.nebrel.client.gui.layout.PlusPageView;
 import de.nebrel.client.gui.layout.SettingsListView;
 import de.nebrel.client.gui.theme.Theme;
 import de.nebrel.client.module.Module;
@@ -32,17 +34,20 @@ import java.util.List;
 /**
  * The in-game client menu.
  *
- * <p>Three views share one window: the module grid, a module's settings, and
- * the client's own settings. Switching between them slides and cross-fades
- * inside the panel rather than pushing a new screen, so the frame stays put and
- * the transition reads as navigation rather than a jump.</p>
+ * <p>Five views share one window: the module grid, a module's settings, the
+ * client's own settings, the Nebrel+ page and the nametag designer. Switching
+ * between them slides and cross-fades inside the panel rather than pushing a new
+ * screen, so the frame stays put and the transition reads as navigation rather
+ * than a jump.</p>
  */
 public final class NebrelClientScreen extends Screen {
 
     private enum View {
         MODULES,
         MODULE_SETTINGS,
-        CLIENT_SETTINGS
+        CLIENT_SETTINGS,
+        PLUS,
+        PLUS_DESIGNER
     }
 
     // Layout constants, in unscaled GUI pixels before the menu scale is applied.
@@ -71,6 +76,8 @@ public final class NebrelClientScreen extends Screen {
     private final SearchComponent search;
     private final ScrollContainer moduleScroll;
     private final SettingsListView settingsList;
+    private final PlusPageView plusPage;
+    private final NametagDesignerView designer;
     private final IconButtonComponent themeButton;
     private final IconButtonComponent hudEditorButton;
     private final IconButtonComponent resetButton;
@@ -109,6 +116,9 @@ public final class NebrelClientScreen extends Screen {
         this.search = new SearchComponent(this.ui, this::onQueryChanged);
         this.moduleScroll = new ScrollContainer(this.ui);
         this.settingsList = new SettingsListView(this.ui);
+        this.plusPage = new PlusPageView(this.ui, this.nebrel.plus(), this::openDesigner);
+        this.designer = new NametagDesignerView(this.ui, this.nebrel.plus(),
+                this::onKeybindCapture);
 
         this.themeButton = new IconButtonComponent(this.ui, "◐",
                 () -> this.nebrel.themes().toggleDarkLight())
@@ -117,7 +127,7 @@ public final class NebrelClientScreen extends Screen {
                 () -> this.client.setScreen(new HudEditorScreen(this)))
                 .tooltip("Open the HUD editor");
         this.resetButton = new IconButtonComponent(this.ui, "↺", this::confirmReset)
-                .tooltip("Reset this module's settings");
+                .tooltip("Reset these settings to their defaults");
         this.backButton = new IconButtonComponent(this.ui, "‹", this::goBack)
                 .tooltip("Back to the module list");
         this.headerToggle = new ToggleComponent(this.ui,
@@ -236,7 +246,24 @@ public final class NebrelClientScreen extends Screen {
         switchView(View.CLIENT_SETTINGS);
     }
 
+    private void openPlus() {
+        this.openModule = null;
+        this.plusPage.resetScroll();
+        switchView(View.PLUS);
+    }
+
+    private void openDesigner() {
+        this.designer.resetScroll();
+        switchView(View.PLUS_DESIGNER);
+    }
+
     private void goBack() {
+        // The designer was opened from the Nebrel+ page, so back returns there
+        // rather than jumping all the way out to the module grid.
+        if (this.view == View.PLUS_DESIGNER) {
+            switchView(View.PLUS);
+            return;
+        }
         this.openModule = null;
         switchView(View.MODULES);
     }
@@ -246,6 +273,7 @@ public final class NebrelClientScreen extends Screen {
             return;
         }
         this.settingsList.closeOverlays();
+        this.designer.closeOverlays();
         this.tooltip.dismiss();
         this.view = target;
         // Slide the incoming view in from the side it conceptually comes from.
@@ -268,6 +296,18 @@ public final class NebrelClientScreen extends Screen {
                         target.resetSettings();
                         this.nebrel.config().markDirty();
                         this.nebrel.notifications().info(target.name(), "Settings reset to defaults.");
+                    });
+        } else if (this.view == View.PLUS_DESIGNER) {
+            this.modal.show("Reset Nebrel+ styling?",
+                    "Badge style, nametag colours, every effect and the additional "
+                            + "nametag go back to their defaults. This cannot be undone.",
+                    "Reset",
+                    () -> {
+                        this.designer.resetAll();
+                        this.nebrel.plus().invalidateCaches();
+                        this.nebrel.config().markDirty();
+                        this.nebrel.notifications().info("Nebrel+",
+                                "Styling reset to defaults.");
                     });
         } else if (this.view == View.CLIENT_SETTINGS) {
             this.modal.show("Reset client settings?",
@@ -434,8 +474,36 @@ public final class NebrelClientScreen extends Screen {
             }
         }
 
-        // Client settings pinned to the bottom.
-        float settingsY = this.panelY + this.panelHeight - NAV_ROW_HEIGHT - 10.0F;
+        // Nebrel+ and client settings are pinned to the bottom, below the
+        // categories, because they are destinations rather than filters.
+        float plusY = plusRowY();
+        boolean plusActive = this.view == View.PLUS || this.view == View.PLUS_DESIGNER;
+        boolean plusHovered = RenderUtil.hovered(mouseX, mouseY, this.panelX + 6.0F, plusY,
+                sidebar - 12.0F, NAV_ROW_HEIGHT);
+        if (plusActive || plusHovered) {
+            RenderUtil.roundedRect(context, this.panelX + 6.0F, plusY, sidebar - 12.0F,
+                    NAV_ROW_HEIGHT, 6.0F,
+                    ColorUtil.fadeAlpha(plusActive ? theme.accentSoft : theme.surfaceHover, amount));
+        }
+        // The Nebrel+ row keeps the accent even when it is not selected: it is
+        // the one entry in the list that names a product rather than a view.
+        int plusColor = ColorUtil.fadeAlpha(
+                plusActive || plusHovered ? theme.accent : ColorUtil.withAlpha(theme.accent, 200),
+                amount);
+        float plusTextY = plusY + (NAV_ROW_HEIGHT - RenderUtil.lineHeight()) / 2.0F + 1.0F;
+        if (collapsed) {
+            RenderUtil.textCentered(context, "✦", this.panelX + sidebar / 2.0F, plusTextY, plusColor);
+        } else {
+            RenderUtil.textFlat(context, "✦", this.panelX + 15.0F, plusTextY, plusColor);
+            RenderUtil.textFlat(context, "Nebrel+", this.panelX + 30.0F, plusTextY, plusColor);
+            if (this.nebrel.plus().localIsPlus()) {
+                RenderUtil.textScaled(context, "ON", this.panelX + sidebar - 20.0F,
+                        plusTextY + 1.0F, 0.8F,
+                        ColorUtil.fadeAlpha(theme.success, amount), false);
+            }
+        }
+
+        float settingsY = settingsRowY();
         boolean settingsActive = this.view == View.CLIENT_SETTINGS;
         boolean settingsHovered = RenderUtil.hovered(mouseX, mouseY, this.panelX + 6.0F, settingsY,
                 sidebar - 12.0F, NAV_ROW_HEIGHT);
@@ -454,6 +522,14 @@ public final class NebrelClientScreen extends Screen {
             RenderUtil.textFlat(context, "⚙", this.panelX + 15.0F, settingsTextY, settingsColor);
             RenderUtil.textFlat(context, "Settings", this.panelX + 30.0F, settingsTextY, settingsColor);
         }
+    }
+
+    private float settingsRowY() {
+        return this.panelY + this.panelHeight - NAV_ROW_HEIGHT - 10.0F;
+    }
+
+    private float plusRowY() {
+        return settingsRowY() - NAV_ROW_HEIGHT - NAV_GAP;
     }
 
     /** Vertical offset of nav row {@code index}, including the group gap. */
@@ -491,6 +567,8 @@ public final class NebrelClientScreen extends Screen {
             case MODULES -> renderModuleView(context, mouseX, mouseY, delta, amount);
             case MODULE_SETTINGS -> renderModuleSettings(context, mouseX, mouseY, delta, amount);
             case CLIENT_SETTINGS -> renderClientSettings(context, mouseX, mouseY, delta, amount);
+            case PLUS -> renderPlusPage(context, mouseX, mouseY, delta, amount);
+            case PLUS_DESIGNER -> renderDesigner(context, mouseX, mouseY, delta, amount);
         }
 
         matrices.pop();
@@ -655,6 +733,64 @@ public final class NebrelClientScreen extends Screen {
         this.settingsList.render(context, mouseX, mouseY, delta);
     }
 
+    private void renderPlusPage(DrawContext context, int mouseX, int mouseY, float delta,
+                                float amount) {
+        float left = contentLeft();
+        float width = contentWidth();
+        renderSubHeader(context, "Nebrel+", "Membership, badge and nametag styling",
+                false, amount, mouseX, mouseY, delta);
+
+        this.plusPage.setBounds(left + CONTENT_PADDING, this.panelY + HEADER_HEIGHT,
+                width - CONTENT_PADDING * 2.0F, this.panelHeight - HEADER_HEIGHT - 10.0F);
+        this.plusPage.render(context, mouseX, mouseY, delta);
+    }
+
+    private void renderDesigner(DrawContext context, int mouseX, int mouseY, float delta,
+                                float amount) {
+        float left = contentLeft();
+        float width = contentWidth();
+        renderSubHeader(context, "✎  Nametag Designer",
+                "Changes apply live, above your head and in the preview",
+                true, amount, mouseX, mouseY, delta);
+
+        this.designer.setBounds(left + CONTENT_PADDING, this.panelY + HEADER_HEIGHT,
+                width - CONTENT_PADDING * 2.0F, this.panelHeight - HEADER_HEIGHT - 10.0F);
+        this.designer.render(context, mouseX, mouseY, delta);
+    }
+
+    /**
+     * The back arrow, a title, a subtitle and the divider.
+     *
+     * <p>Shared by the views that are entered from somewhere else, so they line
+     * up with the module settings header rather than each inventing its own.</p>
+     */
+    private void renderSubHeader(DrawContext context, String title, String subtitle,
+                                 boolean withReset, float amount,
+                                 int mouseX, int mouseY, float delta) {
+        Theme theme = this.ui.theme();
+        float left = contentLeft();
+        float width = contentWidth();
+        float headerY = this.panelY + 12.0F;
+
+        this.backButton.setBounds(left + CONTENT_PADDING - 4.0F, headerY, 20.0F, 20.0F);
+        this.backButton.render(context, mouseX, mouseY, delta);
+
+        float textX = left + CONTENT_PADDING + 22.0F;
+        if (withReset) {
+            this.resetButton.setBounds(left + width - CONTENT_PADDING - 20.0F, headerY,
+                    20.0F, 20.0F);
+            this.resetButton.render(context, mouseX, mouseY, delta);
+        }
+
+        RenderUtil.textFlat(context, title, textX, headerY + 1.0F,
+                ColorUtil.fadeAlpha(theme.textPrimary, amount));
+        RenderUtil.textScaled(context, subtitle, textX, headerY + RenderUtil.lineHeight() + 2.0F,
+                0.85F, ColorUtil.fadeAlpha(theme.textSecondary, amount), false);
+
+        RenderUtil.rect(context, left + 1.0F, this.panelY + HEADER_HEIGHT - 6.0F, width - 2.0F,
+                1.0F, ColorUtil.fadeAlpha(theme.divider, amount));
+    }
+
     /** Accent swatches, shown above the client settings list. */
     private void renderAccentRow(DrawContext context, float x, float y, float width,
                                  int mouseX, int mouseY, float amount) {
@@ -715,6 +851,12 @@ public final class NebrelClientScreen extends Screen {
         if (this.resetButton.isHovered(mouseX, mouseY)) {
             return this.resetButton.tooltip();
         }
+        if (this.view == View.PLUS) {
+            return this.plusPage.tooltipAt(mouseX, mouseY);
+        }
+        if (this.view == View.PLUS_DESIGNER) {
+            return this.designer.tooltipAt(mouseX, mouseY);
+        }
         return this.settingsList.tooltipAt(mouseX, mouseY);
     }
 
@@ -770,6 +912,23 @@ public final class NebrelClientScreen extends Screen {
                     return true;
                 }
             }
+            case PLUS -> {
+                if (this.backButton.mouseClicked(mouseX, mouseY, button)) {
+                    return true;
+                }
+                if (this.plusPage.mouseClicked(mouseX, mouseY, button)) {
+                    return true;
+                }
+            }
+            case PLUS_DESIGNER -> {
+                if (this.backButton.mouseClicked(mouseX, mouseY, button)
+                        || this.resetButton.mouseClicked(mouseX, mouseY, button)) {
+                    return true;
+                }
+                if (this.designer.mouseClicked(mouseX, mouseY, button)) {
+                    return true;
+                }
+            }
         }
         return super.mouseClicked(mouseX, mouseY, button);
     }
@@ -799,8 +958,12 @@ public final class NebrelClientScreen extends Screen {
             }
         }
 
-        float settingsY = this.panelY + this.panelHeight - NAV_ROW_HEIGHT - 10.0F;
-        if (RenderUtil.hovered(mouseX, mouseY, this.panelX + 6.0F, settingsY,
+        if (RenderUtil.hovered(mouseX, mouseY, this.panelX + 6.0F, plusRowY(),
+                sidebar - 12.0F, NAV_ROW_HEIGHT)) {
+            openPlus();
+            return true;
+        }
+        if (RenderUtil.hovered(mouseX, mouseY, this.panelX + 6.0F, settingsRowY(),
                 sidebar - 12.0F, NAV_ROW_HEIGHT)) {
             openClientSettings();
             return true;
@@ -831,6 +994,8 @@ public final class NebrelClientScreen extends Screen {
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         this.moduleScroll.mouseReleased(mouseX, mouseY, button);
         this.settingsList.mouseReleased(mouseX, mouseY, button);
+        this.plusPage.mouseReleased(mouseX, mouseY, button);
+        this.designer.mouseReleased(mouseX, mouseY, button);
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
@@ -839,16 +1004,31 @@ public final class NebrelClientScreen extends Screen {
         if (this.modal.open()) {
             return true;
         }
-        if (this.view == View.MODULES) {
-            if (this.moduleScroll.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
-                return true;
+        switch (this.view) {
+            case MODULES -> {
+                if (this.moduleScroll.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
+                    return true;
+                }
+                if (this.search.visible()
+                        && this.search.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
+                    return true;
+                }
             }
-            if (this.search.visible()
-                    && this.search.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
-                return true;
+            case PLUS -> {
+                if (this.plusPage.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
+                    return true;
+                }
             }
-        } else if (this.settingsList.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
-            return true;
+            case PLUS_DESIGNER -> {
+                if (this.designer.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
+                    return true;
+                }
+            }
+            default -> {
+                if (this.settingsList.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
+                    return true;
+                }
+            }
         }
         return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
     }
@@ -858,12 +1038,27 @@ public final class NebrelClientScreen extends Screen {
         if (this.modal.open()) {
             return true;
         }
-        if (this.view == View.MODULES) {
-            if (this.moduleScroll.mouseScrolled(mouseX, mouseY, vertical)) {
-                return true;
+        switch (this.view) {
+            case MODULES -> {
+                if (this.moduleScroll.mouseScrolled(mouseX, mouseY, vertical)) {
+                    return true;
+                }
             }
-        } else if (this.settingsList.mouseScrolled(mouseX, mouseY, vertical)) {
-            return true;
+            case PLUS -> {
+                if (this.plusPage.mouseScrolled(mouseX, mouseY, vertical)) {
+                    return true;
+                }
+            }
+            case PLUS_DESIGNER -> {
+                if (this.designer.mouseScrolled(mouseX, mouseY, vertical)) {
+                    return true;
+                }
+            }
+            default -> {
+                if (this.settingsList.mouseScrolled(mouseX, mouseY, vertical)) {
+                    return true;
+                }
+            }
         }
         return super.mouseScrolled(mouseX, mouseY, horizontal, vertical);
     }
@@ -875,8 +1070,14 @@ public final class NebrelClientScreen extends Screen {
         }
 
         // A capturing keybind row or an open popover takes the key first.
-        if (this.view != View.MODULES && this.settingsList.keyPressed(keyCode, scanCode, modifiers)) {
+        if (this.view == View.PLUS_DESIGNER
+                && this.designer.keyPressed(keyCode, scanCode, modifiers)) {
             return true;
+        }
+        if (this.view == View.MODULE_SETTINGS || this.view == View.CLIENT_SETTINGS) {
+            if (this.settingsList.keyPressed(keyCode, scanCode, modifiers)) {
+                return true;
+            }
         }
         if (this.view == View.MODULES && this.search.visible()
                 && this.search.keyPressed(keyCode, scanCode, modifiers)) {
@@ -921,6 +1122,12 @@ public final class NebrelClientScreen extends Screen {
             }
             return false;
         }
+        if (this.view == View.PLUS_DESIGNER) {
+            return this.designer.charTyped(chr, modifiers);
+        }
+        if (this.view == View.PLUS) {
+            return false;
+        }
         return this.settingsList.charTyped(chr, modifiers);
     }
 
@@ -931,6 +1138,7 @@ public final class NebrelClientScreen extends Screen {
         }
         this.closing = true;
         this.settingsList.closeOverlays();
+        this.designer.closeOverlays();
         this.openAmount.animateTo(0.0F);
         if (!this.ui.animationsEnabled()) {
             this.client.setScreen(null);
