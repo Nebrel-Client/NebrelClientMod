@@ -29,6 +29,18 @@ sourceSets {
 }
 
 loom {
+    // Required for these unobfuscated 26.x targets - without a `mods {}`
+    // entry Loom falls back to treating the project as a classic obfuscated
+    // Minecraft setup, which is what produced "Configuration 'mappings' has
+    // no dependencies" once the (correctly absent, see below) mappings
+    // dependency wasn't there to satisfy it. Confirmed against Fabric's own
+    // FabricMC/fabric-example-mod, `26.1` branch.
+    mods {
+        nebrelclient {
+            sourceSet sourceSets.main
+        }
+    }
+
     // Client-only mod: everything lives in src/main, gated by
     // "environment": "client" in fabric.mod.json.
     runs {
@@ -62,6 +74,9 @@ tasks.withType(JavaCompile).configureEach {
 
 java {
     withSourcesJar()
+    JavaVersion javaVersion = JavaVersion.toVersion(rootProject.property('java_version'))
+    sourceCompatibility = javaVersion
+    targetCompatibility = javaVersion
 }
 
 processResources {

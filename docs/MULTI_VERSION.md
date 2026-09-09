@@ -40,6 +40,14 @@ nothing to map (the jar already ships with real names). Fabric's own archived
 26.1.2 porting guide confirms the fix is to remove the `mappings` line
 entirely, not to call `officialMojangMappings()`.
 
+Removing that line alone then failed differently: "Configuration 'mappings'
+has no dependencies" - Loom still expected something there because the
+project hadn't declared itself as a Loom "mods {}" project yet. The real
+fix (confirmed against `FabricMC/fabric-example-mod`'s own `26.1` branch) is
+a `loom { mods { <mod-id> { sourceSet sourceSets.main } } }` block; once
+that's present Loom stops expecting the classic obfuscated-Minecraft mapping
+setup at all.
+
 | Target  | Loom    | Fabric Loader | Fabric API        |
 |---------|---------|----------------|-------------------|
 | 26.1    | 1.15.5  | 0.18.4         | 0.145.1+26.1      |
