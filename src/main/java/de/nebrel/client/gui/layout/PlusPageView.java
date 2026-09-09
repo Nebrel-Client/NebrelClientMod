@@ -27,9 +27,9 @@ import java.util.List;
  */
 public final class PlusPageView {
 
-    private static final float CARD_HEIGHT = 46.0F;
-    private static final float CARD_GAP = 6.0F;
-    private static final float CARD_MIN_WIDTH = 168.0F;
+    private static final float CARD_HEIGHT = 54.0F;
+    private static final float CARD_GAP = 8.0F;
+    private static final float CARD_MIN_WIDTH = 220.0F;
 
     private final UiContext ui;
     private final NebrelPlus plus;

@@ -53,16 +53,24 @@ public final class NebrelClientScreen extends Screen {
     }
 
     // Layout constants, in unscaled GUI pixels before the menu scale is applied.
-    private static final float BASE_WIDTH = 560.0F;
-    private static final float BASE_HEIGHT = 344.0F;
-    private static final float SIDEBAR_WIDTH = 124.0F;
-    private static final float HEADER_HEIGHT = 42.0F;
+    // The panel is sized as a fraction of the available (already GUI-scale
+    // adjusted) window rather than a fixed pixel box, so it reads as a real
+    // client window instead of a small config dialog floating in the middle
+    // of the screen. menuScale remains a user-controlled multiplier on top.
+    private static final float WIDTH_FRACTION = 0.82F;
+    private static final float HEIGHT_FRACTION = 0.82F;
+    private static final float MIN_PANEL_WIDTH = 460.0F;
+    private static final float MIN_PANEL_HEIGHT = 300.0F;
+    private static final float MAX_PANEL_WIDTH = 1180.0F;
+    private static final float MAX_PANEL_HEIGHT = 760.0F;
+    private static final float SIDEBAR_WIDTH = 168.0F;
+    private static final float HEADER_HEIGHT = 52.0F;
     private static final float PANEL_RADIUS = 12.0F;
-    private static final float CONTENT_PADDING = 14.0F;
-    private static final float CARD_MIN_WIDTH = 196.0F;
-    private static final float CARD_GAP = 8.0F;
-    private static final float NAV_ROW_HEIGHT = 22.0F;
-    private static final float NAV_GAP = 2.0F;
+    private static final float CONTENT_PADDING = 20.0F;
+    private static final float CARD_MIN_WIDTH = 300.0F;
+    private static final float CARD_GAP = 12.0F;
+    private static final float NAV_ROW_HEIGHT = 28.0F;
+    private static final float NAV_GAP = 4.0F;
 
     private final NebrelClient nebrel;
     private final UiContext ui;
@@ -175,18 +183,23 @@ public final class NebrelClientScreen extends Screen {
 
     private void recomputeLayout() {
         float scale = this.ui.settings().menuScale.getFloat();
-        this.panelWidth = Math.min(this.width - 32.0F, BASE_WIDTH * scale);
-        this.panelHeight = Math.min(this.height - 32.0F, BASE_HEIGHT * scale);
-        // Very small windows: fall back to almost the whole screen.
-        this.panelWidth = Math.max(this.panelWidth, Math.min(this.width - 8.0F, 320.0F));
-        this.panelHeight = Math.max(this.panelHeight, Math.min(this.height - 8.0F, 200.0F));
+        float targetWidth = this.width * WIDTH_FRACTION * scale;
+        float targetHeight = this.height * HEIGHT_FRACTION * scale;
+        this.panelWidth = NebrelMath.clamp(targetWidth, MIN_PANEL_WIDTH,
+                Math.min(this.width - 24.0F, MAX_PANEL_WIDTH * scale));
+        this.panelHeight = NebrelMath.clamp(targetHeight, MIN_PANEL_HEIGHT,
+                Math.min(this.height - 24.0F, MAX_PANEL_HEIGHT * scale));
+        // Very small windows: the fraction/min above can still overshoot a tiny
+        // window, so fall back to almost the whole screen rather than clipping.
+        this.panelWidth = Math.min(this.panelWidth, this.width - 8.0F);
+        this.panelHeight = Math.min(this.panelHeight, this.height - 8.0F);
         this.panelX = (this.width - this.panelWidth) / 2.0F;
         this.panelY = (this.height - this.panelHeight) / 2.0F;
     }
 
     private float sidebarWidth() {
         // Collapse the sidebar labels on narrow windows rather than clipping them.
-        return this.panelWidth < 420.0F ? 40.0F : SIDEBAR_WIDTH;
+        return this.panelWidth < 520.0F ? 48.0F : SIDEBAR_WIDTH;
     }
 
     private boolean sidebarCollapsed() {
@@ -409,7 +422,7 @@ public final class NebrelClientScreen extends Screen {
                 ColorUtil.fadeAlpha(theme.divider, amount));
 
         // Brand.
-        float brandY = this.panelY + 15.0F;
+        float brandY = this.panelY + 19.0F;
         if (collapsed) {
             RenderUtil.textCentered(context, "N", this.panelX + sidebar / 2.0F, brandY,
                     ColorUtil.fadeAlpha(theme.accent, amount));
@@ -576,7 +589,7 @@ public final class NebrelClientScreen extends Screen {
             offset += NAV_ROW_HEIGHT + NAV_GAP;
             // A wider gap separates the two virtual entries from the categories.
             if (entries.get(i) == ModuleCategory.FAVORITES) {
-                offset += 8.0F;
+                offset += 12.0F;
             }
         }
         return offset;
@@ -632,7 +645,7 @@ public final class NebrelClientScreen extends Screen {
                 buttonSize, buttonSize);
         this.hudEditorButton.render(context, mouseX, mouseY, delta);
 
-        float searchWidth = Math.min(180.0F, width - CONTENT_PADDING * 2.0F
+        float searchWidth = Math.min(260.0F, width - CONTENT_PADDING * 2.0F
                 - RenderUtil.textWidth(title) - buttonSize * 2.0F - 24.0F);
         if (searchWidth > 70.0F) {
             this.search.setBounds(rightEdge - buttonSize * 2.0F - 12.0F - searchWidth,
