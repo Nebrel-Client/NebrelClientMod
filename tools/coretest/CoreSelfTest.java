@@ -1698,7 +1698,7 @@ public final class CoreSelfTest {
                 .allMatch(icon -> icon.size() == Icons.ALL.size()));
         check("every shipped icon actually draws something",
                 Icons.ALL_ICONS.values().stream().allMatch(PixelIcon::hasContent));
-        check("twenty-six icons ship", Icons.ALL_ICONS.size() == 26);
+        check("forty-three icons ship", Icons.ALL_ICONS.size() == 43);
 
         // -- the constructor's own validation ---------------------------------
         check("a non-square grid is rejected",
@@ -1745,9 +1745,46 @@ public final class CoreSelfTest {
         check("Toggle Sprint gets its bespoke icon",
                 Icons.forModuleId("toggle_sprint") == Icons.FORWARD);
         check("Screen Dim gets its bespoke icon", Icons.forModuleId("blur") == Icons.BLUR_RINGS);
-        check("a module with no bespoke icon falls back to null, not a guess",
-                Icons.forModuleId("appleskin") == null);
-        check("an unknown id is also null, not an exception",
+        check("Time Changer gets its bespoke icon", Icons.forModuleId("time_changer") == Icons.CLOCK);
+        check("Weather Changer gets its bespoke icon",
+                Icons.forModuleId("weather_changer") == Icons.CLOUD_RAIN);
+        check("FOV Changer gets its bespoke icon", Icons.forModuleId("fov_changer") == Icons.EYE);
+        check("Item Highlighter gets its bespoke icon",
+                Icons.forModuleId("item_highlighter") == Icons.FOCUS);
+        check("Borderless Window gets its bespoke icon",
+                Icons.forModuleId("borderless_window") == Icons.WINDOW);
+        check("Arrow Trail gets its bespoke icon",
+                Icons.forModuleId("arrow_trail") == Icons.ARROW_TRAIL);
+        check("Glint Colorizer gets its bespoke icon",
+                Icons.forModuleId("glint_colorizer") == Icons.SPARKLE);
+        check("Item Model gets its bespoke icon",
+                Icons.forModuleId("item_model") == Icons.AXES_DIAMOND);
+        check("3D Skin Layers gets its bespoke icon",
+                Icons.forModuleId("skin_layers_3d") == Icons.LAYERS);
+        check("Wavey Capes gets its bespoke icon", Icons.forModuleId("wavey_capes") == Icons.CAPE);
+        check("Shulker Tooltip gets its bespoke icon",
+                Icons.forModuleId("shulker_tooltip") == Icons.CRATE_GRID);
+        check("Pack Tweaks gets its bespoke icon",
+                Icons.forModuleId("pack_tweaks") == Icons.CRATE_GEAR);
+        check("Overflow Particles gets its bespoke icon",
+                Icons.forModuleId("overflow_particles") == Icons.SPARKLES_SCATTER);
+        check("Vanilla HUD gets its bespoke icon",
+                Icons.forModuleId("vanilla_hud") == Icons.STATUS_ROWS);
+        check("Food Details gets its bespoke icon", Icons.forModuleId("appleskin") == Icons.APPLE);
+        check("TNT Timer gets its bespoke icon", Icons.forModuleId("tnt_timer") == Icons.CRATE_FUSE);
+        check("Animations gets its bespoke icon",
+                Icons.forModuleId("animations") == Icons.MOTION_LINES);
+        check("every one of the 32 modules now has a bespoke icon",
+                java.util.stream.Stream.of(
+                        "nebrel_hud", "keystrokes", "appleskin", "tnt_timer", "vanilla_hud",
+                        "crosshair", "fullbright", "fov_changer", "damage_tint", "animations",
+                        "arrow_trail", "toggle_sprint", "freelook", "time_changer", "weather_changer",
+                        "no_fog", "blur", "glint_colorizer", "item_model", "custom_nametags",
+                        "health_indicators", "hitbox", "item_highlighter", "overflow_particles",
+                        "skin_layers_3d", "wavey_capes", "auto_text", "shulker_tooltip",
+                        "pack_tweaks", "borderless_window", "tiers", "quests")
+                        .allMatch(id -> Icons.forModuleId(id) != null));
+        check("an unknown id is null, not an exception",
                 Icons.forModuleId("not_a_real_module") == null);
     }
 
