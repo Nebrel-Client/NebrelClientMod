@@ -28,8 +28,17 @@ Each subproject's `gradle.properties` holds that version's exact
 declares its own `fabric-loom` plugin version (a literal, since Gradle's
 `plugins {}` block can't take a variable) and then applies the shared
 `gradle/version-project.gradle` for everything else - the Loom `runs` block,
-the `mappings loom.officialMojangMappings()` dependency, `processResources`
-templating into `fabric.mod.json`, and the jar/sources-jar setup.
+the dependency block (deliberately with **no** `mappings` line - see below),
+`processResources` templating into `fabric.mod.json`, and the jar/sources-jar
+setup.
+
+**No mappings dependency at all.** The first attempt used
+`mappings loom.officialMojangMappings()`, which failed with "Failed to find
+official mojang mappings for 26.1" - that call fetches a per-version mapping
+file from Mojang, and Mojang doesn't publish one for 26.x because there's
+nothing to map (the jar already ships with real names). Fabric's own archived
+26.1.2 porting guide confirms the fix is to remove the `mappings` line
+entirely, not to call `officialMojangMappings()`.
 
 | Target  | Loom    | Fabric Loader | Fabric API        |
 |---------|---------|----------------|-------------------|
