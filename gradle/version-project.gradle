@@ -42,11 +42,15 @@ loom {
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.property('minecraft_version')}"
-    // Minecraft 26.x ships unobfuscated with Mojang's own names baked in -
-    // there is no Yarn intermediary to depend on any more.
-    mappings loom.officialMojangMappings()
-    // Loom no longer remaps Minecraft or mods for these targets, so these are
-    // plain `implementation`/`compileOnly`, not `modImplementation`.
+    // No `mappings` dependency at all: Minecraft 26.x ships unobfuscated with
+    // Mojang's own names already baked into the jar, so there is nothing to
+    // map - not Yarn, not even a `loom.officialMojangMappings()` lookup
+    // (that call fetches a per-version mapping file Mojang doesn't publish
+    // for 26.x and fails with "Failed to find official mojang mappings").
+    // Confirmed against Fabric's own archived 26.1.2 porting guide.
+    //
+    // Loom no longer remaps Minecraft or mods for these targets either, so
+    // these are plain `implementation`/`compileOnly`, not `modImplementation`.
     implementation "net.fabricmc:fabric-loader:${project.property('loader_version')}"
     implementation "net.fabricmc.fabric-api:fabric-api:${project.property('fabric_version')}"
 }
