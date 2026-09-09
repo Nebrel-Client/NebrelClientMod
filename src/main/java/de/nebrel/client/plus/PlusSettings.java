@@ -31,11 +31,11 @@ public final class PlusSettings implements ConfigSection {
 
     /** How the badge is drawn. */
     public enum BadgeStyle {
-        /** Rounded plate behind the glyph. The default. */
+        /** Rounded plate behind the glyph. */
         PLATE("Plate"),
         /** Outlined plate, no fill. */
         OUTLINE("Outline"),
-        /** The glyph alone, no plate. */
+        /** The glyph alone, no plate, no background. The default. */
         PLAIN("Plain"),
         /** Plate with the glyph in brackets, for very small text. */
         BRACKET("Bracket");
@@ -99,8 +99,11 @@ public final class PlusSettings implements ConfigSection {
                 "Show the N badge in front of your name", true));
         this.badgeEnabled.section(PlusSections.BADGE);
 
+        // Plain by default: the badge sits in front of the name as a coloured
+        // glyph with no plate or outline behind it, so it reads as part of the
+        // name rather than as a separate chip stamped in front of it.
         this.badgeStyle = add(new EnumSetting<>("plus.badge.style", "Style",
-                "How the badge is drawn", BadgeStyle.PLATE));
+                "How the badge is drawn", BadgeStyle.PLAIN));
         this.badgeStyle.section(PlusSections.BADGE);
         this.badgeStyle.visibleWhen(this.badgeEnabled);
 

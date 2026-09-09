@@ -1533,7 +1533,7 @@ public final class CoreSelfTest {
 
         settings.resetAll();
         check("reset clears the badge style",
-                settings.badgeStyle.get() == PlusSettings.BadgeStyle.PLATE);
+                settings.badgeStyle.get() == PlusSettings.BadgeStyle.PLAIN);
         check("reset clears the effects", settings.nametag().effects.enabledCount() == 0);
         check("reset clears the extra line",
                 settings.nametag().additional.resolvedText().isEmpty());
