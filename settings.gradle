@@ -10,3 +10,22 @@ pluginManagement {
 }
 
 rootProject.name = 'NebrelClientMod'
+
+// ---------------------------------------------------------------------------
+// Multi-version targets.
+//
+// Minecraft 26.1 switched to year-based versioning and ships unobfuscated, so
+// there is no single Yarn "intermediary" any more: each target Minecraft
+// version gets its own Fabric Loom subproject (its own Minecraft artifact,
+// its own Fabric API/Loader coordinates), all compiling the SAME shared
+// source in ../src/main/java. `gradlew build` builds every subproject below,
+// in this order, and every one of them has to succeed.
+//
+// See versions/<mc_version>/gradle.properties for that version's exact
+// Fabric Loader / Fabric API coordinates and Loom plugin version.
+// ---------------------------------------------------------------------------
+['26.1', '26.1.1', '26.1.2', '26.2'].each { mcVersion ->
+    String projectName = "v${mcVersion.replace('.', '_')}"
+    include(projectName)
+    project(":${projectName}").projectDir = file("versions/${mcVersion}")
+}

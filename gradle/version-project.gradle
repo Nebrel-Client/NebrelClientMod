@@ -1,0 +1,83 @@
+// ---------------------------------------------------------------------------
+// Shared configuration for every Minecraft-version subproject under
+// versions/<mc_version>/. Each subproject's own build.gradle applies this
+// after declaring its own fabric-loom plugin version (that part can't be
+// shared: Gradle's `plugins {}` block needs a literal version per project).
+//
+// All four targets compile the SAME source tree - there is exactly one
+// src/main/java, not one copy per version - so a fix or feature only has to
+// be written once. If a real API difference between versions ever shows up,
+// it gets isolated behind a small per-version shim class, not a source fork.
+// ---------------------------------------------------------------------------
+
+version = "${rootProject.property('mod_version')}+${project.property('minecraft_version')}"
+group = rootProject.property('maven_group')
+
+base {
+    archivesName = rootProject.property('archives_base_name')
+}
+
+repositories {
+    mavenCentral()
+}
+
+sourceSets {
+    main {
+        java { srcDirs = ["${rootDir}/src/main/java"] }
+        resources { srcDirs = ["${rootDir}/src/main/resources"] }
+    }
+}
+
+loom {
+    // Client-only mod: everything lives in src/main, gated by
+    // "environment": "client" in fabric.mod.json.
+    runs {
+        client {
+            client()
+            ideConfigGenerated true
+            runDir "${rootDir}/run"
+        }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.property('minecraft_version')}"
+    // Minecraft 26.x ships unobfuscated with Mojang's own names baked in -
+    // there is no Yarn intermediary to depend on any more.
+    mappings loom.officialMojangMappings()
+    // Loom no longer remaps Minecraft or mods for these targets, so these are
+    // plain `implementation`/`compileOnly`, not `modImplementation`.
+    implementation "net.fabricmc:fabric-loader:${project.property('loader_version')}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.property('fabric_version')}"
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = rootProject.property('java_version') as int
+    it.options.encoding = 'UTF-8'
+}
+
+java {
+    withSourcesJar()
+}
+
+processResources {
+    inputs.property 'version', project.version
+    inputs.property 'minecraft_version', project.property('minecraft_version')
+    inputs.property 'loader_version', project.property('loader_version')
+    inputs.property 'java_version', rootProject.property('java_version')
+
+    filesMatching('fabric.mod.json') {
+        expand 'version': project.version,
+                'minecraft_version': project.property('minecraft_version'),
+                'loader_version': project.property('loader_version'),
+                'java_version': rootProject.property('java_version')
+    }
+}
+
+jar {
+    inputs.property 'archivesName', project.base.archivesName
+
+    from("${rootDir}/LICENSE") {
+        rename { "${it}_${inputs.properties.archivesName}" }
+    }
+}

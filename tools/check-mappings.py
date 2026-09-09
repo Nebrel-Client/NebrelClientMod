@@ -1,12 +1,26 @@
 #!/usr/bin/env python3
 """
-Validate Nebrel's Minecraft API usage against the Yarn mappings.
+Validate Nebrel's Minecraft API usage against the Yarn 1.21.1 mappings.
 
-This repository targets Minecraft 1.21.1 through Fabric Loom. On a machine that
-cannot reach maven.fabricmc.net there is no way to compile the game-facing half
-of the client, so this script provides the next best thing: it checks every
-Minecraft type and member name the source refers to against the official Yarn
-mapping files.
+IMPORTANT - what this script can and cannot tell you as of the 26.x multi-
+version build (see versions/*/gradle.properties, docs/MULTI_VERSION.md):
+
+Minecraft 26.1 and later ship unobfuscated, with Mojang's own names built in,
+and Fabric no longer publishes Yarn mappings for them at all - there is
+nothing for this script to check the 26.x targets against. It still clones
+and checks against Yarn 1.21.1 (hardcoded fallback below, since
+`minecraft_version` no longer lives in the root gradle.properties), which
+only tells you whether the source is still internally consistent with the
+*original* API it was written against. It is NOT evidence that the code
+compiles against 26.1, 26.1.1, 26.1.2 or 26.2's real (Mojang-mapped) API -
+those have real, unverified porting risk from ~a year of Minecraft updates
+between 1.21.1 and 26.x. Real compilation on a machine with Fabric/Mojang
+network access remains the only source of truth for the 26.x targets.
+
+On a machine that cannot reach maven.fabricmc.net there is no way to compile
+the game-facing half of the client, so for the 1.21.1-era baseline this script
+provided the next best thing: it checks every Minecraft type and member name
+the source refers to against the official Yarn mapping files.
 
 It verifies three things:
 
@@ -23,8 +37,8 @@ argument type. Real compilation remains the source of truth.
 Usage:
     tools/check-mappings.py [path/to/yarn/mappings]
 
-If the mappings path is omitted the script clones FabricMC/yarn at the branch
-matching ``minecraft_version`` in gradle.properties into build/yarn.
+If the mappings path is omitted the script clones FabricMC/yarn's 1.21.1
+branch into build/yarn.
 """
 
 from __future__ import annotations
@@ -54,12 +68,6 @@ NON_YARN_PREFIXES = (
 )
 
 
-def read_property(name: str) -> str:
-    text = (ROOT / "gradle.properties").read_text(encoding="utf-8")
-    match = re.search(rf"^{re.escape(name)}\s*=\s*(.+)$", text, re.MULTILINE)
-    return match.group(1).strip() if match else ""
-
-
 def ensure_mappings(argv: list[str]) -> Path:
     if len(argv) > 1:
         path = Path(argv[1]).resolve()
@@ -67,7 +75,12 @@ def ensure_mappings(argv: list[str]) -> Path:
             sys.exit(f"mappings directory not found: {path}")
         return path
 
-    version = read_property("minecraft_version") or "1.21.1"
+    # Hardcoded rather than read from gradle.properties: none of the four
+    # 26.x version subprojects declare a `minecraft_version` there any more
+    # (it now lives per-subproject in versions/*/gradle.properties, and none
+    # of those versions have Yarn mappings to check against anyway). 1.21.1
+    # is what the source was actually written and last verified against.
+    version = "1.21.1"
     target = ROOT / "build" / "yarn"
     mappings = target / "mappings"
     if not mappings.is_dir():
