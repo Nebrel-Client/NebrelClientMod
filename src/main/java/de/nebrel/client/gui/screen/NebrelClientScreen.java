@@ -123,8 +123,8 @@ public final class NebrelClientScreen extends Screen {
                 this::onKeybindCapture);
 
         this.themeButton = new IconButtonComponent(this.ui, "◐",
-                () -> this.nebrel.themes().toggleDarkLight())
-                .tooltip("Switch between the dark and light theme");
+                () -> this.nebrel.themes().cycleTheme())
+                .tooltip("Cycle Dark, Light and Glass themes");
         this.hudEditorButton = new IconButtonComponent(this.ui, "▤",
                 () -> this.client.setScreen(new HudEditorScreen(this)))
                 .tooltip("Open the HUD editor");

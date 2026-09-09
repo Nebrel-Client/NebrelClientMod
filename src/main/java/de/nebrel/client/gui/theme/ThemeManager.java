@@ -85,6 +85,19 @@ public final class ThemeManager {
         setTheme(this.base.dark() ? Themes.LIGHT : Themes.DARK);
     }
 
+    /** Steps to the next built-in theme, wrapping back to the first after the last. */
+    public void cycleTheme() {
+        Theme[] all = Themes.all();
+        int index = 0;
+        for (int i = 0; i < all.length; i++) {
+            if (all[i].id().equals(this.base.id())) {
+                index = i;
+                break;
+            }
+        }
+        setTheme(all[(index + 1) % all.length]);
+    }
+
     /**
      * Applies a new accent.
      *

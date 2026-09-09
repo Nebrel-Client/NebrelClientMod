@@ -8,6 +8,17 @@ package de.nebrel.client.gui.theme;
  * popovers read as layers rather than as outlined boxes. Nebrel Light mirrors
  * the same structure inverted.</p>
  *
+ * <p>Nebrel Glass is the odd one out: every surface token carries partial
+ * alpha, so the actual game world shows through the panel rather than a solid
+ * fill. There is no shader-based blur behind it — a real blur needs a
+ * framebuffer post-process pass, which is exactly the risk the client's own
+ * {@code Screen Dim} module was named away from "Blur" to avoid, and the same
+ * reasoning applies here. What Glass draws instead is honest translucency: a
+ * white frost thick enough to keep text legible over whatever is behind it,
+ * the same principle a phone's control centre uses over a busy wallpaper. It
+ * reads best with the client's own "Background" setting set to None — a Dim
+ * or Blur scrim behind a translucent panel just muddies both.</p>
+ *
  * <p>The default accent is a violet used only for state (active nav row, an on
  * toggle, slider fill, focus ring). Large areas stay neutral.</p>
  */
@@ -58,12 +69,37 @@ public final class Themes {
             .shadow(0x2E101018)
             .build();
 
+    /**
+     * Translucent white glass. Every non-accent, non-text token below carries
+     * alpha under 0xFF on purpose — see the class documentation.
+     */
+    public static final Theme GLASS = Theme.builder("nebrel_glass", "Nebrel Glass", false)
+            .background(0x73FFFFFF)
+            .surface(0x8CFFFFFF)
+            .surfaceElevated(0xB3FFFFFF)
+            .surfaceHover(0xCCFFFFFF)
+            .textPrimary(0xFF1A1A22)
+            .textSecondary(0xFF55555F)
+            .textDisabled(0xFF9797A0)
+            .accent(DEFAULT_ACCENT)
+            .accentHover(0xFF9F79F8)
+            .accentPressed(0xFF6D3FCC)
+            .accentSoft(0x338B5CF6)
+            .border(0x33000000)
+            .divider(0x1F000000)
+            .success(0xFF16A46B)
+            .warning(0xFFC98207)
+            .error(0xFFD93B41)
+            .scrim(0x8C1A1A22)
+            .shadow(0x33101018)
+            .build();
+
     private Themes() {
     }
 
     /** All built-in themes, in the order the theme picker shows them. */
     public static Theme[] all() {
-        return new Theme[]{DARK, LIGHT};
+        return new Theme[]{DARK, LIGHT, GLASS};
     }
 
     /** Looks a theme up by id, falling back to {@link #DARK}. */

@@ -697,6 +697,39 @@ public final class CoreSelfTest {
                 ColorUtil.luminance(Themes.DARK.textPrimary) - ColorUtil.luminance(Themes.DARK.surface) > 0.5F);
         check("light text contrasts with surface",
                 ColorUtil.luminance(Themes.LIGHT.surface) - ColorUtil.luminance(Themes.LIGHT.textPrimary) > 0.5F);
+
+        // -- Nebrel Glass: the one theme whose surfaces are meant to show the
+        // world through them, so what matters here is exactly what does NOT
+        // hold for Dark or Light: alpha under 0xFF on every surface token.
+        check("glass background is translucent", ColorUtil.alpha(Themes.GLASS.background) < 0xFF);
+        check("glass surface is translucent", ColorUtil.alpha(Themes.GLASS.surface) < 0xFF);
+        check("glass elevated surface is translucent",
+                ColorUtil.alpha(Themes.GLASS.surfaceElevated) < 0xFF);
+        check("glass hover surface is translucent",
+                ColorUtil.alpha(Themes.GLASS.surfaceHover) < 0xFF);
+        // Text has to stay fully opaque regardless of what shows through
+        // behind it, or it would be unreadable over a busy background.
+        check("glass text stays fully opaque", ColorUtil.alpha(Themes.GLASS.textPrimary) == 0xFF);
+        check("glass text is dark, for contrast against a white frost",
+                ColorUtil.luminance(Themes.GLASS.textPrimary) < 0.3F);
+        check("glass layers still get progressively more opaque",
+                ColorUtil.alpha(Themes.GLASS.background) < ColorUtil.alpha(Themes.GLASS.surface)
+                        && ColorUtil.alpha(Themes.GLASS.surface)
+                        < ColorUtil.alpha(Themes.GLASS.surfaceElevated)
+                        && ColorUtil.alpha(Themes.GLASS.surfaceElevated)
+                        < ColorUtil.alpha(Themes.GLASS.surfaceHover));
+        check("glass keeps the same brand accent as the other themes",
+                Themes.GLASS.accent == Themes.DEFAULT_ACCENT);
+
+        // -- cycling: Dark -> Light -> Glass -> Dark, wrapping cleanly -------
+        ThemeManager cycle = new ThemeManager();
+        check("cycle starts on dark", cycle.baseTheme().id().equals(Themes.DARK.id()));
+        cycle.cycleTheme();
+        check("cycle step 1 is light", cycle.baseTheme().id().equals(Themes.LIGHT.id()));
+        cycle.cycleTheme();
+        check("cycle step 2 is glass", cycle.baseTheme().id().equals(Themes.GLASS.id()));
+        cycle.cycleTheme();
+        check("cycle wraps back to dark", cycle.baseTheme().id().equals(Themes.DARK.id()));
     }
 
     static void testConfigRoundTrip(Path root) {
