@@ -1,0 +1,7 @@
+plugins {
+    // 26.2 needs a newer Loom than the 26.1.x family (enum-extension support
+    // via Fabric Loader 0.19+); the other three subprojects stay on 1.15.
+    id 'fabric-loom' version '1.17'
+}
+
+apply from: "${rootDir}/gradle/version-project.gradle"

@@ -1,76 +1,27 @@
-plugins {
-    id 'fabric-loom' version '1.7-SNAPSHOT'
-}
+// ---------------------------------------------------------------------------
+// Root build script.
+//
+// This project builds four Minecraft targets (see settings.gradle) as
+// separate Fabric Loom subprojects under versions/, all compiling the same
+// shared src/main/java. The root itself applies no Loom plugin and declares
+// no Minecraft dependency - it only hosts the headless core-verification
+// task below, which is intentionally Minecraft-free so it can run on a
+// machine with no Fabric/Mojang network access.
+// ---------------------------------------------------------------------------
 
-version = project.mod_version
-group = project.maven_group
-
-base {
-    archivesName = project.archives_base_name
+configurations {
+    // Only used by `compileCore` below. Gson is already on Minecraft's
+    // runtime classpath via Fabric API, so it is deliberately NOT added as a
+    // dependency of any version subproject and never shaded into a jar.
+    coreDeps
 }
 
 repositories {
     mavenCentral()
 }
 
-configurations {
-    // Only used by the headless `compileCore` verification task below. Gson
-    // itself is already on Minecraft's runtime classpath, so it is deliberately
-    // NOT added to `implementation` and is never shaded into the jar.
-    coreDeps
-}
-
-loom {
-    // Nebrel Client is a client-only mod: everything lives in src/main and is
-    // gated by "environment": "client" in fabric.mod.json. No split source
-    // sets, so there is exactly one place to look for any given class.
-    runs {
-        client {
-            client()
-            ideConfigGenerated true
-            runDir 'run'
-        }
-    }
-}
-
 dependencies {
-    minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-
     coreDeps 'com.google.code.gson:gson:2.10.1'
-}
-
-processResources {
-    inputs.property 'version', project.version
-    inputs.property 'minecraft_version', project.minecraft_version
-    inputs.property 'loader_version', project.loader_version
-
-    filesMatching('fabric.mod.json') {
-        expand 'version': project.version,
-                'minecraft_version': project.minecraft_version,
-                'loader_version': project.loader_version
-    }
-}
-
-tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
-    it.options.encoding = 'UTF-8'
-}
-
-java {
-    withSourcesJar()
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-}
-
-jar {
-    inputs.property 'archivesName', project.base.archivesName
-
-    from('LICENSE') {
-        rename { "${it}_${inputs.properties.archivesName}" }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -79,7 +30,8 @@ jar {
 // The platform-independent half of Nebrel (settings, config, module registry,
 // theme, animation, search) imports no Minecraft classes. This task compiles
 // exactly that subset with the plain JDK so it can be checked on machines that
-// cannot reach the Fabric/Mojang maven hosts.
+// cannot reach the Fabric/Mojang maven hosts, and independently of which of
+// the four Minecraft targets below happens to compile cleanly.
 // ---------------------------------------------------------------------------
 tasks.register('compileCore', JavaCompile) {
     group = 'verification'
@@ -98,6 +50,12 @@ tasks.register('compileCore', JavaCompile) {
     }
     classpath = configurations.coreDeps
     destinationDirectory = layout.buildDirectory.dir('classes/core')
+    // No `java` plugin is applied at the root (see comment above), so this
+    // ad-hoc JavaCompile task gets no sourceCompatibility/targetCompatibility
+    // convention from anywhere and Gradle's task validation rejects the task
+    // without them, even though `options.release` alone would be sufficient.
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
     options.release = 21
     options.encoding = 'UTF-8'
 }
